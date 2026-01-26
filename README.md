@@ -13,7 +13,7 @@ alarms, and local audit logging.
 
 ## Realtime Requirements
 - Unlock after verification Response time < 300ms
-- Unauthorized door open or More than 3 incorrect keys  alarm: < 300 ms
+- Unauthorized door open or More than 5 incorrect keys  alarm: < 300 ms
 - Auto re-lock after 5 second
 
 
