@@ -1,6 +1,21 @@
+# build directories
 build/
-*.o
-*.out
+cmake-build-*/
+out/
+
+# binaries / executables
 sim_nfc
 app
+*.exe
+
+# object files
+*.o
+*.obj
+
+# logs
 logs/
+*.log
+
+# vscode (可选：只保留 tasks.json 就别忽略整个 .vscode)
+.vscode/settings.json
+.vscode/launch.json
