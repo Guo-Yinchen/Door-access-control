@@ -14,6 +14,6 @@ public:
   void off() { set(false); }
 
 private:
-  gpiod_chip* chip_ = nullptr;
-  gpiod_line* line_ = nullptr;
+  gpiod_line_request* req_ = nullptr;
+  unsigned int offset_ = 0;
 };
