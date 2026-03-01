@@ -21,8 +21,6 @@ int main() {
     // 接入 EventBus：GRANTED/DENIED 显示 2 秒后自动回 idle
     leds.attach(bus, 2000);
 
-    std::cout << "Idle\n";
-
     using clock = std::chrono::steady_clock;
     auto start = clock::now();
 
