@@ -41,16 +41,20 @@ int main() {
       }
 
       // 模拟：6秒后发 DENIED（只发给 LED）
-      //（因为 GRANTED 会保持 2 秒并自动回 idle，所以 2->4 是 granted，4->6 idle）
       if (!sent_denied && t >= 6) {
         bus.publish(AuthResult::denied, Target::LED);
         std::cout << "Publish: DENIED\n";
         sent_denied = true;
       }
+    
+      if (!sent_granted && t >= 8) {
+        bus.publish(AuthResult::idle, Target::LED);
+        std::cout << "Publish: IDLE\n";
+        sent_granted = true;
+      }
 
-      // 分发事件 + LED 到点回 idle
+      // 分发事件 + LED
       bus.poll();
-      leds.tick();
 
       // 演示结束条件：发完 denied 后再过 3 秒退出
       if (sent_denied && t >= 10) {

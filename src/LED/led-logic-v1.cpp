@@ -32,12 +32,9 @@ void StatusLeds::all_off() {
   green_.off();
 }
 
-// ===================== ✅ 新增：接入 EventBus =====================
+// 接入 EventBus
 void StatusLeds::attach(EventBus& bus, int hold_ms) {
   hold_ = std::chrono::milliseconds(hold_ms);
-
-  // 默认状态
-  idle();
 
   // 只订阅发给 LED 的事件
   bus.subscribe(Target::LED, [this](const AuthEvent& e) {
@@ -47,13 +44,4 @@ void StatusLeds::attach(EventBus& bus, int hold_ms) {
     pending_idle_ = true;
     deadline_ = std::chrono::steady_clock::now() + hold_;
   });
-}
-
-// ===================== ✅ 新增：到点回 idle（不阻塞） =====================
-void StatusLeds::tick() {
-  if (!pending_idle_) return;
-  if (std::chrono::steady_clock::now() >= deadline_) {
-    idle();
-    pending_idle_ = false;
-  }
 }
