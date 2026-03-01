@@ -39,7 +39,8 @@ void StatusLeds::attach(EventBus& bus, int hold_ms) {
   // 只订阅发给 LED 的事件
   bus.subscribe(Target::LED, [this](const AuthEvent& e) {
     if (e.result == AuthResult::granted) granted();
-    else                                 denied();
+    if (e.result == AuthResult::idle) idle();
+    else                            denied();
 
     pending_idle_ = true;
     deadline_ = std::chrono::steady_clock::now() + hold_;
