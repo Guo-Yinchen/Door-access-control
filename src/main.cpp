@@ -32,14 +32,14 @@ int main() {
       auto now = clock::now();
       auto t = std::chrono::duration_cast<std::chrono::seconds>(now - start).count();
 
-      // 模拟：2秒后发 GRANTED（只发给 LED）
+      // 模拟：0秒后发 GRANTED（只发给 LED）
       if (!sent_granted && t >= 0) {
         bus.publish(AuthResult::granted, Target::LED);
         std::cout << "Publish: GRANTED\n";
         sent_granted = true;
       }
 
-      // 模拟：6秒后发 DENIED（只发给 LED）
+      // 模拟：4秒后发 DENIED（只发给 LED）
       if (!sent_denied && t >= 4) {
         bus.publish(AuthResult::denied, Target::LED);
         std::cout << "Publish: DENIED\n";
