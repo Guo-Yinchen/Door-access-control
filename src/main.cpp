@@ -1,5 +1,7 @@
 #include "LED/led-v1.hpp"
 #include "GPIO/gpio-line.hpp"
+#include "EVENT/event-bus.hpp"
+#include "AuthResult/AuthResult.hpp"
 #include <chrono>
 #include <thread>
 #include <iostream>
@@ -13,27 +15,53 @@ int main() {
     const int YELLOW_GPIO = 27;
     const int GREEN_GPIO = 22;
 
+    EventBus bus;
     StatusLeds leds(chip, RED_GPIO, YELLOW_GPIO, GREEN_GPIO, "door_control");
 
-    leds.idle();
+    // 接入 EventBus：GRANTED/DENIED 显示 2 秒后自动回 idle
+    leds.attach(bus, 2000);
+
     std::cout << "Idle\n";
 
-    // 模拟事件
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    leds.granted();
-    std::cout << "Granted\n";
+    using clock = std::chrono::steady_clock;
+    auto start = clock::now();
 
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    leds.idle();
-    std::cout << "Back to idle\n";
+    bool sent_granted = false;
+    bool sent_denied  = false;
 
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    leds.denied();
-    std::cout << "Denied\n";
+    while (true) {
+      auto now = clock::now();
+      auto t = std::chrono::duration_cast<std::chrono::seconds>(now - start).count();
 
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    leds.idle();
-    std::cout << "Exit\n";
+      // 模拟：2秒后发 GRANTED（只发给 LED）
+      if (!sent_granted && t >= 2) {
+        bus.publish(AuthResult::granted, Target::LED);
+        std::cout << "Publish: GRANTED\n";
+        sent_granted = true;
+      }
+
+      // 模拟：6秒后发 DENIED（只发给 LED）
+      //（因为 GRANTED 会保持 2 秒并自动回 idle，所以 2->4 是 granted，4->6 idle）
+      if (!sent_denied && t >= 6) {
+        bus.publish(AuthResult::denied, Target::LED);
+        std::cout << "Publish: DENIED\n";
+        sent_denied = true;
+      }
+
+      // 分发事件 + LED 到点回 idle
+      bus.poll();
+      leds.tick();
+
+      // 演示结束条件：发完 denied 后再过 3 秒退出
+      if (sent_denied && t >= 10) {
+        std::cout << "Exit\n";
+        break;
+      }
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    leds.all_off();
     return 0;
 
   } catch (const std::exception& e) {
