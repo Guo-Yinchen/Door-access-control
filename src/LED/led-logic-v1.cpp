@@ -1,4 +1,5 @@
-#include "LED/led-v1.hpp"
+#include "LED/led-v1.hpp"   
+#include <chrono>
 
 StatusLeds::StatusLeds(const char* chip_name,
                        int red_gpio, int yellow_gpio, int green_gpio,
@@ -15,7 +16,7 @@ void StatusLeds::idle() {
 
 void StatusLeds::granted() {
   red_.off();
-  yellow_.on();   
+  yellow_.on();
   green_.on();
 }
 
@@ -30,3 +31,17 @@ void StatusLeds::all_off() {
   yellow_.off();
   green_.off();
 }
+
+// 接入 EventBus
+void StatusLeds::attach(EventBus& bus, int hold_ms) {
+  hold_ = std::chrono::milliseconds(hold_ms);
+
+  // 只订阅发给 LED 的事件
+bus.subscribe(Target::LED, [this](const AuthEvent& e) {
+  switch (e.result) {
+    case AuthResult::granted: granted(); break;
+    case AuthResult::idle:    idle();    break;
+    case AuthResult::denied:  denied();  break;
+  }
+});
+} 
