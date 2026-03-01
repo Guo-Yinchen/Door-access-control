@@ -1,5 +1,6 @@
+// Uses libgpiod (Linux GPIO character device) v2 C API.
+// See: https://libgpiod.readthedocs.io/
 #include "GPIO/gpio-line.hpp"
-
 #include <cerrno>
 #include <cstring>
 #include <stdexcept>
