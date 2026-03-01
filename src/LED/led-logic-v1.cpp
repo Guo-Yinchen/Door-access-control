@@ -37,12 +37,11 @@ void StatusLeds::attach(EventBus& bus, int hold_ms) {
   hold_ = std::chrono::milliseconds(hold_ms);
 
   // 只订阅发给 LED 的事件
-  bus.subscribe(Target::LED, [this](const AuthEvent& e) {
-    if (e.result == AuthResult::granted) granted();
-    if (e.result == AuthResult::idle) idle();
-    else                            denied();
-
-    pending_idle_ = true;
-    deadline_ = std::chrono::steady_clock::now() + hold_;
-  });
-}
+bus.subscribe(Target::LED, [this](const AuthEvent& e) {
+  switch (e.result) {
+    case AuthResult::granted: granted(); break;
+    case AuthResult::idle:    idle();    break;
+    case AuthResult::denied:  denied();  break;
+  }
+});
+} 
