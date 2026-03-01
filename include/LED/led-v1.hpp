@@ -1,6 +1,6 @@
 #pragma once
 #include "GPIO/gpio-line.hpp"
-#include "EVENT/event-bus.hpp"   // 你的 EventBus (Target/AuthEvent/AuthResult/EventBus)
+#include "EVENT/event-bus.hpp"  
 
 #include <chrono>
 
