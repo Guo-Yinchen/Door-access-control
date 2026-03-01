@@ -28,8 +28,8 @@ int main() {
     // 读卡器：键盘模拟读卡器对应 /dev/input/event9
     MagstripeReader reader;
 
-    // 验证器：白名单文件 cards_allowlist.txt，每行一个卡号，# 开头的行会被忽略
-    CardVerifier verifier("cards_allowlist.txt");
+    // 验证器：白名单文件 mag-cards_allowlist.txt
+    CardVerifier verifier("mag-cards_allowlist.txt");
 
     std::cout << "Swipe card now (Ctrl+C to exit)\n";
 
