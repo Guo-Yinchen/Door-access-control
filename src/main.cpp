@@ -28,6 +28,7 @@ int main() {
 
     bool sent_granted = false;
     bool sent_denied  = false;
+    bool sent_idle    = false;
 
     while (true) {
       auto now = clock::now();
@@ -50,7 +51,7 @@ int main() {
       if (!sent_granted && t >= 8) {
         bus.publish(AuthResult::idle, Target::LED);
         std::cout << "Publish: IDLE\n";
-        sent_granted = true;
+        sent_idle = true;
       }
 
       // 分发事件 + LED
