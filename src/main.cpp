@@ -4,10 +4,24 @@
 #include "Magnetic-reader/Magnetic-reader.hpp"
 #include "verifier/verifier.hpp"
 
+#include <atomic>
+#include <chrono>
+#include <csignal>
 #include <iostream>
+#include <thread>
+
+namespace {
+std::atomic<bool> g_stop_requested{false};
+
+void handle_sigint(int) {
+  g_stop_requested.store(true);
+}
+}
 
 int main() {
   try {
+    std::signal(SIGINT, handle_sigint);
+
     const char* chip = "gpiochip0";
 
     // BCM GPIO 编号
@@ -33,19 +47,32 @@ int main() {
 
     std::cout << "Swipe card now (Ctrl+C to exit)\n";
 
-    // 阻塞循环
-    reader.run([&](const std::string& raw) {
-      std::string card_id;
-      const bool ok = verifier.verify(raw, card_id);
+    std::thread reader_thread([&]() {
+      reader.run([&](const std::string& raw) {
+        std::string card_id;
+        const bool ok = verifier.verify(raw, card_id);
 
-      std::cout << "[RAW]  " << raw << "\n";
-      std::cout << (ok ? "[OK]   " : "[FAIL] ") << card_id << "\n";
+        std::cout << "[RAW]  " << raw << "\n";
+        std::cout << (ok ? "[OK]   " : "[FAIL] ") << card_id << "\n";
 
-      bus.publish(ok ? AuthResult::granted : AuthResult::denied, Target::LED);
-      bus.poll();  // 立即分发给 LED
+        bus.publish(ok ? AuthResult::granted : AuthResult::denied, Target::LED);
+      });
     });
 
+    while (!g_stop_requested.load()) {
+      bus.poll();
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    reader.stop();
+    if (reader_thread.joinable()) {
+      reader_thread.join();
+    }
+
+    bus.publish(AuthResult::idle, Target::LED);
+    bus.poll();
     leds.all_off();
+
     return 0;
 
   } catch (const std::exception& e) {

@@ -1,17 +1,18 @@
 #pragma once
-#include <string>
+#include <atomic>
 #include <functional>
+#include <string>
 
 class MagstripeReader {
 public:
   struct Config {
-    std::string device = "/dev/input/event9"; // 你当前设备就是 event9
+    std::string device = "/dev/input/event9"; // 当前设备 event9
     bool grab_exclusive = false;              // 是否独占抓取(可选)
   };
 
   using CardCallback = std::function<void(const std::string&)>;
 
-  MagstripeReader();                 // 默认用 Config 的默认值
+  MagstripeReader();
   explicit MagstripeReader(Config cfg);
   ~MagstripeReader();
 
@@ -27,7 +28,7 @@ public:
 private:
   Config cfg_;
   int fd_{-1};
-  bool stop_{false};
+  std::atomic<bool> stop_{false};
 
   static char keycode_to_char(int code, bool shift);
 };

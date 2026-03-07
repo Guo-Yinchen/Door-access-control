@@ -1,12 +1,26 @@
-#include "LED/led-v1.hpp"   
-#include <chrono>
+#include "LED/led-v1.hpp"
 
 StatusLeds::StatusLeds(const char* chip_name,
                        int red_gpio, int yellow_gpio, int green_gpio,
                        const char* consumer)
   : red_(chip_name, red_gpio, consumer),
     yellow_(chip_name, yellow_gpio, consumer),
-    green_(chip_name, green_gpio, consumer) {}
+    green_(chip_name, green_gpio, consumer) {
+  start_timer_worker();
+}
+
+StatusLeds::~StatusLeds() {
+  {
+    std::lock_guard<std::mutex> lock(mtx_);
+    stop_worker_ = true;
+    pending_idle_ = false;
+  }
+  cv_.notify_all();
+
+  if (timer_thread_.joinable()) {
+    timer_thread_.join();
+  }
+}
 
 void StatusLeds::idle() {
   red_.off();
@@ -32,16 +46,72 @@ void StatusLeds::all_off() {
   green_.off();
 }
 
-// 接入 EventBus
+void StatusLeds::start_timer_worker() {
+  timer_thread_ = std::thread([this]() {
+    std::unique_lock<std::mutex> lock(mtx_);
+
+    while (!stop_worker_) {
+      cv_.wait(lock, [this] { return stop_worker_ || pending_idle_; });
+      if (stop_worker_) break;
+
+      const auto deadline = deadline_;
+
+      const bool interrupted = cv_.wait_until(lock, deadline, [this, deadline] {
+        return stop_worker_ || !pending_idle_ || deadline_ != deadline;
+      });
+
+      if (stop_worker_) break;
+      if (interrupted) {
+        continue; // 被取消或重新安排了
+      }
+
+      pending_idle_ = false;
+      lock.unlock();
+      idle();
+      lock.lock();
+    }
+  });
+}
+
+void StatusLeds::schedule_idle() {
+  {
+    std::lock_guard<std::mutex> lock(mtx_);
+    pending_idle_ = true;
+    deadline_ = std::chrono::steady_clock::now() + hold_;
+  }
+  cv_.notify_all();
+}
+
+void StatusLeds::cancel_pending_idle() {
+  {
+    std::lock_guard<std::mutex> lock(mtx_);
+    pending_idle_ = false;
+  }
+  cv_.notify_all();
+}
+
 void StatusLeds::attach(EventBus& bus, int hold_ms) {
   hold_ = std::chrono::milliseconds(hold_ms);
 
-  // 只订阅发给 LED 的事件
-bus.subscribe(Target::LED, [this](const AuthEvent& e) {
-  switch (e.result) {
-    case AuthResult::granted: granted(); break;
-    case AuthResult::idle:    idle();    break;
-    case AuthResult::denied:  denied();  break;
-  }
-});
-} 
+  bus.subscribe(Target::LED, [this](const AuthEvent& e) {
+    switch (e.result) {
+      case AuthResult::granted:
+        granted();
+        schedule_idle();
+        break;
+
+      case AuthResult::denied:
+        denied();
+        schedule_idle();
+        break;
+
+      case AuthResult::idle:
+        cancel_pending_idle();
+        idle();
+        break;
+    }
+  });
+}
+
+void StatusLeds::tick() {
+  // 现在由后台线程自动处理延时回 idle

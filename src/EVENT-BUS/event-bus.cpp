@@ -11,22 +11,25 @@ void EventBus::publish(AuthResult r, uint32_t targets) {
 }
 
 void EventBus::poll() {
-  AuthEvent ev;
-  std::vector<Sub> snapshot;
+  while (true) {
+    AuthEvent ev;
+    std::vector<Sub> snapshot;
 
-  {
-    std::lock_guard<std::mutex> lock(mtx_);
-    if (q_.empty()) return;
-    ev = q_.front();
-    q_.pop();
+    {
+      std::lock_guard<std::mutex> lock(mtx_);
+      if (q_.empty()) {
+        return;
+      }
 
-    // 拷贝一份订阅者列表，避免回调里再订阅导致迭代器问题
-    snapshot = subs_;
-  }
+      ev = q_.front();
+      q_.pop();
+      snapshot = subs_;
+    }
 
-  for (auto& s : snapshot) {
-    if ((s.target & ev.targets) != 0) { //  定向过滤
-      s.handler(ev);
+    for (auto& s : snapshot) {
+      if ((s.target & ev.targets) != 0) {
+        s.handler(ev);
+      }
     }
   }
 }
