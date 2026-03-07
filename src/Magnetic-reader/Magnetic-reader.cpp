@@ -7,12 +7,13 @@
 #include <cerrno>
 #include <cstring>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 MagstripeReader::MagstripeReader() : MagstripeReader(Config{}) {}
 
 MagstripeReader::MagstripeReader(Config cfg) : cfg_(std::move(cfg)) {
-  fd_ = ::open(cfg_.device.c_str(), O_RDONLY);
+  fd_ = ::open(cfg_.device.c_str(), O_RDONLY | O_NONBLOCK);
   if (fd_ < 0) {
     throw std::runtime_error(
       "MagstripeReader: open(" + cfg_.device + ") failed: " +
@@ -27,10 +28,6 @@ MagstripeReader::~MagstripeReader() {
 
 void MagstripeReader::stop() {
   stop_.store(true);
-  if (fd_ >= 0) {
-    ::close(fd_);
-    fd_ = -1;
-  }
 }
 
 char MagstripeReader::keycode_to_char(int code, bool shift) {
@@ -74,9 +71,12 @@ void MagstripeReader::run(CardCallback cb) {
       if (errno == EINTR) {
         continue;
       }
-      if (stop_.load() || errno == EBADF) {
-        break;
+
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        continue;
       }
+
       throw std::runtime_error(
         "MagstripeReader: read failed: " + std::string(std::strerror(errno))
       );
@@ -107,5 +107,10 @@ void MagstripeReader::run(CardCallback cb) {
 
     const char c = keycode_to_char(ev.code, shift);
     if (c) buf.push_back(c);
+  }
+
+  if (fd_ >= 0) {
+    ::close(fd_);
+    fd_ = -1;
   }
 }
