@@ -23,7 +23,7 @@ inline constexpr uint32_t operator|(Target a, Target b) {
 }
 
 struct AuthEvent {
-  AuthResult result;   // GRANTED / DENIED
+  AuthResult result;   // GRANTED / DENIED / IDLE
   uint32_t targets;    // 发给谁（Target 的组合）
 };
 
@@ -42,7 +42,7 @@ public:
     publish(r, static_cast<uint32_t>(target));
   }
 
-  // 主循环调用：取一个事件并分发（按 targets 过滤）
+  // 处理当前队列中的全部事件（按 targets 过滤）
   void poll();
 
 private:
