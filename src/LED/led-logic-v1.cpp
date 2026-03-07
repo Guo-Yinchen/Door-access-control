@@ -114,4 +114,4 @@ void StatusLeds::attach(EventBus& bus, int hold_ms) {
 }
 
 void StatusLeds::tick() {
-  // 现在由后台线程自动处理延时回 idle
+}
