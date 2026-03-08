@@ -11,6 +11,8 @@ add_executable(door_access_control
   src/LED/led-logic-v1.cpp
   src/Magnetic-reader/Magnetic-reader.cpp
   src/verifier/verifier.cpp
+  src/Risk/risk-policy.cpp
+  src/FACE/face-verifier.cpp
 )
 
 target_include_directories(door_access_control PRIVATE

@@ -3,6 +3,8 @@
 #include "AuthResult/AuthResult.hpp"
 #include "Magnetic-reader/Magnetic-reader.hpp"
 #include "verifier/verifier.hpp"
+#include "RIsk/risk-policy.hpp"
+#include "FACE/face-verifier.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -31,31 +33,46 @@ int main() {
 
     EventBus bus;
     StatusLeds leds(chip, RED_GPIO, YELLOW_GPIO, GREEN_GPIO, "door_control");
+    MagstripeReader reader;
+    CardVerifier verifier("mag-cards_allowlist.txt");
+    RiskPolicy risk_policy;
+    FaceVerifier face_verifier;
 
-    // 接入 EventBus：GRANTED/DENIED 显示 2 秒后自动回 idle
     leds.attach(bus, 2000);
 
-    // 启动先进入 idle（黄灯常亮）
-    bus.publish(AuthResult::idle, Target::LED);
+    // 启动先进入 idle
+    bus.publish(AuthResult::idle, Target::LED | Target::LOCK);
     bus.poll();
-
-    // 读卡器：键盘模拟读卡器对应 /dev/input/event9
-    MagstripeReader reader;
-
-    // 验证器：白名单文件 mag-cards_allowlist.txt
-    CardVerifier verifier("mag-cards_allowlist.txt");
 
     std::cout << "Swipe card now (Ctrl+C to exit)\n";
 
     std::thread reader_thread([&]() {
       reader.run([&](const std::string& raw) {
         std::string card_id;
-        const bool ok = verifier.verify(raw, card_id);
+        const bool card_ok = verifier.verify(raw, card_id);
 
         std::cout << "[RAW]  " << raw << "\n";
-        std::cout << (ok ? "[OK]   " : "[FAIL] ") << card_id << "\n";
+        std::cout << (card_ok ? "[OK]   " : "[FAIL] ") << card_id << "\n";
 
-        bus.publish(ok ? AuthResult::granted : AuthResult::denied, Target::LED);
+        if (!card_ok) {
+          bus.publish(AuthResult::denied, Target::LED | Target::LOCK);
+          return;
+        }
+
+        // 高危模式：要求人脸验证
+        if (risk_policy.require_face_now()) {
+          std::cout << "[RISK] High-risk condition detected. Face verification required.\n";
+          bus.publish(AuthResult::pending_face, Target::LED | Target::LOCK);
+          bus.poll();
+
+          const bool face_ok = face_verifier.verify(card_id);
+          bus.publish(face_ok ? AuthResult::granted : AuthResult::denied,
+                      Target::LED | Target::LOCK);
+          return;
+        }
+
+        // 普通模式：刷卡通过即可
+        bus.publish(AuthResult::granted, Target::LED | Target::LOCK);
       });
     });
 
@@ -69,7 +86,7 @@ int main() {
       reader_thread.join();
     }
 
-    bus.publish(AuthResult::idle, Target::LED);
+    bus.publish(AuthResult::idle, Target::LED | Target::LOCK);
     bus.poll();
     leds.all_off();
 
