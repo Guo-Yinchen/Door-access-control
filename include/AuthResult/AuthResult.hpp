@@ -3,5 +3,6 @@
 enum class AuthResult {
   granted,
   denied,
-  idle
+  idle,
+  pending_face
 };
