@@ -57,7 +57,17 @@ The software is structured around event-driven processing, callbacks, timers, an
 
 ## 4. System Workflow
 
-edit latter
+The system follows an event-driven workflow:
+
+### Workflow Steps
+- A card is swiped through the magstripe reader
+- The input is captured and processed in realtime
+- The card data is verified against the allowlist
+- If valid, a signal is sent to unlock the door via relay
+- LED indicators update immediately to reflect the access status
+- The system returns to idle state after processing
+
+This workflow ensures low latency and avoids blocking operations by using callbacks and modular components.
 
 ---
 
@@ -124,3 +134,5 @@ The system is implemented using modular C++ components.
 rm -rf build
 cmake -S . -B build
 cmake --build build -j
+
+
