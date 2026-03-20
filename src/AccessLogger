@@ -1,0 +1,42 @@
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <ctime>
+
+class AccessLogger {
+public:
+    explicit AccessLogger(const std::string& filename = "access.log")
+        : logFile(filename, std::ios::app) {}
+
+    void logAccess(const std::string& cardId, bool granted) {
+        if (!logFile.is_open()) {
+            std::cerr << "Failed to open log file." << std::endl;
+            return;
+        }
+
+        logFile << getCurrentTime()
+                << " | Card: " << cardId
+                << " | Status: " << (granted ? "GRANTED" : "DENIED")
+                << std::endl;
+    }
+
+private:
+    std::ofstream logFile;
+
+    std::string getCurrentTime() {
+        std::time_t now = std::time(nullptr);
+        char buffer[32];
+#if defined(_WIN32)
+        ctime_s(buffer, sizeof(buffer), &now);
+#else
+        std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
+#endif
+        return std::string(buffer);
+    }
+};
+
+void testAccessLogger() {
+    AccessLogger logger;
+    logger.logAccess("12345678", true);
+    logger.logAccess("99999999", false);
+}
