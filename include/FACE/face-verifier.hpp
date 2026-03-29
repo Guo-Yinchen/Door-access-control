@@ -4,6 +4,7 @@
 #include <opencv2/objdetect.hpp>
 #include <opencv2/face.hpp>
 
+#include <atomic>
 #include <map>
 #include <string>
 #include <vector>
@@ -14,7 +15,7 @@ public:
                const std::string& model_path   = "models/lbph_faces.yml",
                const std::string& labels_path  = "models/face_labels.txt");
 
-  bool verify(const std::string& card_id);
+  bool verify(const std::string& card_id, const std::atomic<bool>& stop_requested);
   bool is_ready() const;
 
 private:

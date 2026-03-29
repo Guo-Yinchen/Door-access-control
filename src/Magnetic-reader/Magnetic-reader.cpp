@@ -2,6 +2,7 @@
 
 #include <linux/input.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <unistd.h>
 
 #include <cerrno>
@@ -19,18 +20,46 @@ MagstripeReader::MagstripeReader(Config cfg) : cfg_(std::move(cfg)) {
       std::string(std::strerror(errno))
     );
   }
+
+  if (::pipe(stop_pipe_) != 0) {
+    ::close(fd_);
+    fd_ = -1;
+    throw std::runtime_error(
+      "MagstripeReader: pipe() failed: " + std::string(std::strerror(errno))
+    );
+  }
+
+  // 让 stop pipe 的写端非阻塞，避免重复 stop 时卡住
+  int flags = ::fcntl(stop_pipe_[1], F_GETFL, 0);
+  if (flags >= 0) {
+    ::fcntl(stop_pipe_[1], F_SETFL, flags | O_NONBLOCK);
+  }
 }
 
 MagstripeReader::~MagstripeReader() {
   stop();
-}
-
-void MagstripeReader::stop() {
-  stop_.store(true);
 
   if (fd_ >= 0) {
     ::close(fd_);
     fd_ = -1;
+  }
+  if (stop_pipe_[0] >= 0) {
+    ::close(stop_pipe_[0]);
+    stop_pipe_[0] = -1;
+  }
+  if (stop_pipe_[1] >= 0) {
+    ::close(stop_pipe_[1]);
+    stop_pipe_[1] = -1;
+  }
+}
+
+void MagstripeReader::stop() {
+  const bool already = stop_.exchange(true);
+  if (already) return;
+
+  if (stop_pipe_[1] >= 0) {
+    const char byte = 'x';
+    (void)::write(stop_pipe_[1], &byte, 1);
   }
 }
 
@@ -68,6 +97,35 @@ void MagstripeReader::run(CardCallback cb) {
   std::string buf;
 
   while (!stop_.load()) {
+    pollfd fds[2];
+    fds[0].fd = fd_;
+    fds[0].events = POLLIN;
+    fds[0].revents = 0;
+
+    fds[1].fd = stop_pipe_[0];
+    fds[1].events = POLLIN;
+    fds[1].revents = 0;
+
+    const int pr = ::poll(fds, 2, -1);
+    if (pr < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      throw std::runtime_error(
+        "MagstripeReader: poll failed: " + std::string(std::strerror(errno))
+      );
+    }
+
+    if (fds[1].revents & POLLIN) {
+      char drain[32];
+      (void)::read(stop_pipe_[0], drain, sizeof(drain));
+      break;
+    }
+
+    if (!(fds[0].revents & POLLIN)) {
+      continue;
+    }
+
     input_event ev{};
     const ssize_t n = ::read(fd_, &ev, sizeof(ev));
 
@@ -75,20 +133,12 @@ void MagstripeReader::run(CardCallback cb) {
       if (errno == EINTR) {
         continue;
       }
-
-      if (stop_.load() && (errno == EBADF || errno == ENODEV || errno == EIO)) {
-        break;
-      }
-
       throw std::runtime_error(
         "MagstripeReader: read failed: " + std::string(std::strerror(errno))
       );
     }
 
     if (n == 0) {
-      if (stop_.load()) {
-        break;
-      }
       continue;
     }
 

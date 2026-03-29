@@ -9,7 +9,6 @@
 
 #include "AuthResult/AuthResult.hpp"
 
-// 组件标签（以后扩展就在这里加）
 enum class Target : uint32_t {
   LED    = 1u << 0,
   BUZZER = 1u << 1,
@@ -18,35 +17,27 @@ enum class Target : uint32_t {
   ALL    = 0xFFFFFFFFu
 };
 
-// 组合 Target 用的 | 运算
 inline constexpr uint32_t operator|(Target a, Target b) {
   return static_cast<uint32_t>(a) | static_cast<uint32_t>(b);
 }
 
 struct AuthEvent {
-  AuthResult result;   // GRANTED / DENIED / IDLE
-  uint32_t targets;    // 发给谁（Target 的组合）
+  AuthResult result;
+  uint32_t targets;
 };
 
 class EventBus {
 public:
   using Handler = std::function<void(const AuthEvent&)>;
 
-  // 订阅：声明“我属于哪个组件”
   void subscribe(Target my_target, Handler handler);
-
-  // 发布：声明“这次发给哪些组件”
   void publish(AuthResult r, uint32_t targets);
 
-  // 便捷：只发给单个组件（比如现在只发 LED）
   void publish(AuthResult r, Target target) {
     publish(r, static_cast<uint32_t>(target));
   }
 
-  // 阻塞式事件分发：没有事件时休眠，有事件时被唤醒
   void dispatch_loop();
-
-  // 请求停止 dispatch_loop()
   void stop();
 
 private:

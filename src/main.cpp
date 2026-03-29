@@ -26,7 +26,6 @@ int main() {
 
     const char* chip = "gpiochip0";
 
-    // BCM GPIO 编号
     const int RED_GPIO = 17;
     const int YELLOW_GPIO = 27;
     const int GREEN_GPIO = 22;
@@ -44,13 +43,16 @@ int main() {
       bus.dispatch_loop();
     });
 
-    // 启动先进入 idle
     bus.publish(AuthResult::idle, Target::LED | Target::LOCK);
 
     std::cout << "Swipe card now (Ctrl+C to exit)\n";
 
     std::thread reader_thread([&]() {
       reader.run([&](const std::string& raw) {
+        if (g_stop_requested.load()) {
+          return;
+        }
+
         std::string card_id;
         const bool card_ok = verifier.verify(raw, card_id);
 
@@ -66,7 +68,12 @@ int main() {
           std::cout << "[RISK] High-risk condition detected. Face verification required.\n";
           bus.publish(AuthResult::pending_face, Target::LED | Target::LOCK);
 
-          const bool face_ok = face_verifier.verify(card_id);
+          const bool face_ok = face_verifier.verify(card_id, g_stop_requested);
+
+          if (g_stop_requested.load()) {
+            return;
+          }
+
           bus.publish(face_ok ? AuthResult::granted : AuthResult::denied,
                       Target::LED | Target::LOCK);
           return;

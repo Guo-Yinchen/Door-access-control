@@ -16,22 +16,12 @@ namespace {
 constexpr int kFaceWidth = 160;
 constexpr int kFaceHeight = 160;
 
-// 8 秒窗口
 constexpr int kVerificationWindowMs = 8000;
-
-// 每 100ms 拍 1 张
 constexpr int kCaptureIntervalMs = 100;
-
-// 成功 3 次立即通过
 constexpr int kRequiredMatches = 3;
-
-// 最多 16 张
 constexpr int kMaxCaptures = 16;
-
-// 由我们自己在代码里判断阈值
 constexpr double kConfidenceThreshold = 90.0;
 
-// 临时图片路径
 const char* kCapturePath = "/tmp/face_verify.jpg";
 }
 
@@ -127,7 +117,7 @@ cv::Mat FaceVerifier::preprocess_face(const cv::Mat& gray, const cv::Rect& face_
   return roi;
 }
 
-bool FaceVerifier::verify(const std::string& card_id) {
+bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& stop_requested) {
   if (!ready_) {
     std::cerr << "[FACE] Verifier not ready.\n";
     return false;
@@ -140,6 +130,11 @@ bool FaceVerifier::verify(const std::string& card_id) {
   int capture_count = 0;
 
   while (capture_count < kMaxCaptures) {
+    if (stop_requested.load()) {
+      std::cout << "[FACE] Face verification aborted by stop request.\n";
+      return false;
+    }
+
     const auto now = std::chrono::steady_clock::now();
     const auto elapsed_ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
@@ -156,6 +151,11 @@ bool FaceVerifier::verify(const std::string& card_id) {
 
     const int ret = std::system(cmd.c_str());
     ++capture_count;
+
+    if (stop_requested.load()) {
+      std::cout << "[FACE] Face verification aborted by stop request.\n";
+      return false;
+    }
 
     if (ret != 0) {
       std::cerr << "[FACE] Capture command failed at frame " << capture_count << "\n";
@@ -187,6 +187,11 @@ bool FaceVerifier::verify(const std::string& card_id) {
     bool matched_this_capture = false;
 
     for (const auto& face_rect : faces) {
+      if (stop_requested.load()) {
+        std::cout << "[FACE] Face verification aborted by stop request.\n";
+        return false;
+      }
+
       cv::Mat face_img = preprocess_face(gray, face_rect);
 
       int predicted_label = -1;
