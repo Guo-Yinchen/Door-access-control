@@ -3,6 +3,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <cfloat>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -15,22 +16,12 @@ namespace {
 constexpr int kFaceWidth = 160;
 constexpr int kFaceHeight = 160;
 
-// 8 秒窗口
 constexpr int kVerificationWindowMs = 8000;
-
-// 每 500ms 拍 1 张 = 2 fps
-constexpr int kCaptureIntervalMs = 500;
-
-// 成功 3 次立即通过
+constexpr int kCaptureIntervalMs = 100;
 constexpr int kRequiredMatches = 3;
-
-// 最多 16 张
 constexpr int kMaxCaptures = 16;
-
-// 先放宽一点，方便调试
 constexpr double kConfidenceThreshold = 90.0;
 
-// 临时图片路径
 const char* kCapturePath = "/tmp/face_verify.jpg";
 }
 
@@ -38,7 +29,7 @@ FaceVerifier::FaceVerifier(const std::string& cascade_path,
                            const std::string& model_path,
                            const std::string& labels_path)
     : ready_(false),
-      recognizer_(cv::face::LBPHFaceRecognizer::create(1, 8, 8, 8, kConfidenceThreshold)) {
+      recognizer_(cv::face::LBPHFaceRecognizer::create(1, 8, 8, 8, DBL_MAX)) {
   bool ok = true;
 
   if (!face_cascade_.load(cascade_path)) {
@@ -126,7 +117,7 @@ cv::Mat FaceVerifier::preprocess_face(const cv::Mat& gray, const cv::Rect& face_
   return roi;
 }
 
-bool FaceVerifier::verify(const std::string& card_id) {
+bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& stop_requested) {
   if (!ready_) {
     std::cerr << "[FACE] Verifier not ready.\n";
     return false;
@@ -139,6 +130,11 @@ bool FaceVerifier::verify(const std::string& card_id) {
   int capture_count = 0;
 
   while (capture_count < kMaxCaptures) {
+    if (stop_requested.load()) {
+      std::cout << "[FACE] Face verification aborted by stop request.\n";
+      return false;
+    }
+
     const auto now = std::chrono::steady_clock::now();
     const auto elapsed_ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
@@ -147,16 +143,19 @@ bool FaceVerifier::verify(const std::string& card_id) {
       break;
     }
 
-    // 删除旧图，避免误读旧文件
     std::remove(kCapturePath);
 
-    // 用 rpicam-still 拍一张
     const std::string cmd =
         "rpicam-still -n -t 800 --width 640 --height 480 -o " +
         std::string(kCapturePath) + " >/dev/null 2>&1";
 
     const int ret = std::system(cmd.c_str());
     ++capture_count;
+
+    if (stop_requested.load()) {
+      std::cout << "[FACE] Face verification aborted by stop request.\n";
+      return false;
+    }
 
     if (ret != 0) {
       std::cerr << "[FACE] Capture command failed at frame " << capture_count << "\n";
@@ -188,10 +187,15 @@ bool FaceVerifier::verify(const std::string& card_id) {
     bool matched_this_capture = false;
 
     for (const auto& face_rect : faces) {
+      if (stop_requested.load()) {
+        std::cout << "[FACE] Face verification aborted by stop request.\n";
+        return false;
+      }
+
       cv::Mat face_img = preprocess_face(gray, face_rect);
 
       int predicted_label = -1;
-      double confidence = 9999.0;
+      double confidence = DBL_MAX;
 
       try {
         recognizer_->predict(face_img, predicted_label, confidence);
@@ -202,6 +206,11 @@ bool FaceVerifier::verify(const std::string& card_id) {
 
       std::cout << "[FACE] raw predicted_label=" << predicted_label
                 << ", confidence=" << confidence << "\n";
+
+      if (predicted_label < 0) {
+        std::cout << "[FACE] recognizer returned unknown label\n";
+        continue;
+      }
 
       auto it = label_to_card_.find(predicted_label);
       if (it == label_to_card_.end()) {

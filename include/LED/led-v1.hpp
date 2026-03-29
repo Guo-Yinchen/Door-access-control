@@ -21,8 +21,9 @@ public:
   void granted();  // 绿灯亮（黄保持亮），红灭
   void denied();   // 红灯亮（黄保持亮），绿灭
   void all_off();  // 全灭（可选）
+  void pending_face();  // 红灯+黄灯常亮，绿灭
 
-  // 接入 EventBus（订阅 GRANTED/DENIED/IDLE，只订阅 LED 目标）
+  // 接入 EventBus，根据事件自动切换状态
   // hold_ms：显示 granted/denied 后保持多久，再自动回 idle
   void attach(EventBus& bus, int hold_ms = 1000);
 

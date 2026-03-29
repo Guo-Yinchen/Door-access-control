@@ -21,7 +21,11 @@ StatusLeds::~StatusLeds() {
     timer_thread_.join();
   }
 }
-
+void StatusLeds::pending_face() {
+  red_.on();
+  yellow_.on();
+  green_.on();
+}
 void StatusLeds::idle() {
   red_.off();
   green_.off();
@@ -109,6 +113,11 @@ void StatusLeds::attach(EventBus& bus, int hold_ms) {
         cancel_pending_idle();
         idle();
         break;
+
+      case AuthResult::pending_face:
+        pending_face();
+        break;
+
     }
   });
 }
