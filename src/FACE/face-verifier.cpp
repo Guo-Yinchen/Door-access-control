@@ -3,6 +3,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <cfloat>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -18,8 +19,8 @@ constexpr int kFaceHeight = 160;
 // 8 秒窗口
 constexpr int kVerificationWindowMs = 8000;
 
-// 每 500ms 拍 1 张 = 2 fps
-constexpr int kCaptureIntervalMs = 500;
+// 每 100ms 拍 1 张
+constexpr int kCaptureIntervalMs = 100;
 
 // 成功 3 次立即通过
 constexpr int kRequiredMatches = 3;
@@ -27,7 +28,7 @@ constexpr int kRequiredMatches = 3;
 // 最多 16 张
 constexpr int kMaxCaptures = 16;
 
-// 先放宽一点，方便调试
+// 由我们自己在代码里判断阈值
 constexpr double kConfidenceThreshold = 90.0;
 
 // 临时图片路径
@@ -38,7 +39,7 @@ FaceVerifier::FaceVerifier(const std::string& cascade_path,
                            const std::string& model_path,
                            const std::string& labels_path)
     : ready_(false),
-      recognizer_(cv::face::LBPHFaceRecognizer::create(1, 8, 8, 8, kConfidenceThreshold)) {
+      recognizer_(cv::face::LBPHFaceRecognizer::create(1, 8, 8, 8, DBL_MAX)) {
   bool ok = true;
 
   if (!face_cascade_.load(cascade_path)) {
@@ -147,10 +148,8 @@ bool FaceVerifier::verify(const std::string& card_id) {
       break;
     }
 
-    // 删除旧图，避免误读旧文件
     std::remove(kCapturePath);
 
-    // 用 rpicam-still 拍一张
     const std::string cmd =
         "rpicam-still -n -t 800 --width 640 --height 480 -o " +
         std::string(kCapturePath) + " >/dev/null 2>&1";
@@ -191,7 +190,7 @@ bool FaceVerifier::verify(const std::string& card_id) {
       cv::Mat face_img = preprocess_face(gray, face_rect);
 
       int predicted_label = -1;
-      double confidence = 9999.0;
+      double confidence = DBL_MAX;
 
       try {
         recognizer_->predict(face_img, predicted_label, confidence);
@@ -202,6 +201,11 @@ bool FaceVerifier::verify(const std::string& card_id) {
 
       std::cout << "[FACE] raw predicted_label=" << predicted_label
                 << ", confidence=" << confidence << "\n";
+
+      if (predicted_label < 0) {
+        std::cout << "[FACE] recognizer returned unknown label\n";
+        continue;
+      }
 
       auto it = label_to_card_.find(predicted_label);
       if (it == label_to_card_.end()) {
