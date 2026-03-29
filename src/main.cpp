@@ -7,10 +7,10 @@
 #include "FACE/face-verifier.hpp"
 
 #include <atomic>
-#include <chrono>
 #include <csignal>
 #include <iostream>
 #include <thread>
+#include <unistd.h>
 
 namespace {
 std::atomic<bool> g_stop_requested{false};
@@ -40,9 +40,12 @@ int main() {
 
     leds.attach(bus, 2000);
 
+    std::thread bus_thread([&]() {
+      bus.dispatch_loop();
+    });
+
     // 启动先进入 idle
     bus.publish(AuthResult::idle, Target::LED | Target::LOCK);
-    bus.poll();
 
     std::cout << "Swipe card now (Ctrl+C to exit)\n";
 
@@ -59,11 +62,9 @@ int main() {
           return;
         }
 
-        // 高危模式：要求人脸验证
         if (risk_policy.require_face_now()) {
           std::cout << "[RISK] High-risk condition detected. Face verification required.\n";
           bus.publish(AuthResult::pending_face, Target::LED | Target::LOCK);
-          bus.poll();
 
           const bool face_ok = face_verifier.verify(card_id);
           bus.publish(face_ok ? AuthResult::granted : AuthResult::denied,
@@ -71,25 +72,26 @@ int main() {
           return;
         }
 
-        // 普通模式：刷卡通过即可
         bus.publish(AuthResult::granted, Target::LED | Target::LOCK);
       });
     });
 
     while (!g_stop_requested.load()) {
-      bus.poll();
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      ::pause();
     }
 
     reader.stop();
+    bus.publish(AuthResult::idle, Target::LED | Target::LOCK);
+    bus.stop();
+
     if (reader_thread.joinable()) {
       reader_thread.join();
     }
+    if (bus_thread.joinable()) {
+      bus_thread.join();
+    }
 
-    bus.publish(AuthResult::idle, Target::LED | Target::LOCK);
-    bus.poll();
     leds.all_off();
-
     return 0;
 
   } catch (const std::exception& e) {

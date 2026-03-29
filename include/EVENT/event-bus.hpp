@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <condition_variable>
 #include <functional>
 #include <mutex>
 #include <queue>
@@ -42,8 +43,11 @@ public:
     publish(r, static_cast<uint32_t>(target));
   }
 
-  // 处理当前队列中的全部事件（按 targets 过滤）
-  void poll();
+  // 阻塞式事件分发：没有事件时休眠，有事件时被唤醒
+  void dispatch_loop();
+
+  // 请求停止 dispatch_loop()
+  void stop();
 
 private:
   struct Sub {
@@ -52,6 +56,8 @@ private:
   };
 
   std::mutex mtx_;
+  std::condition_variable cv_;
   std::queue<AuthEvent> q_;
   std::vector<Sub> subs_;
+  bool stop_{false};
 };
