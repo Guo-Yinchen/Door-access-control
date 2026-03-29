@@ -1,28 +1,43 @@
 #include "FACE/face-verifier.hpp"
 
+#include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
-#include <opencv2/highgui.hpp>
 
 #include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <thread>
 
 namespace {
-constexpr int kFaceWidth  = 160;
+constexpr int kFaceWidth = 160;
 constexpr int kFaceHeight = 160;
-constexpr int kCaptureFrames = 20;         // 最多看 20 帧
-constexpr int kRequiredMatches = 2;        // 至少 2 次匹配成功，降低误判
-constexpr double kConfidenceThreshold = 65.0; // LBPH 距离阈值，越小越严格
+
+// 8 秒窗口
+constexpr int kVerificationWindowMs = 8000;
+
+// 每 500ms 拍 1 张 = 2 fps
+constexpr int kCaptureIntervalMs = 500;
+
+// 成功 3 次立即通过
+constexpr int kRequiredMatches = 3;
+
+// 最多 16 张
+constexpr int kMaxCaptures = 16;
+
+// LBPH 阈值，越小越严格
+constexpr double kConfidenceThreshold = 65.0;
+
+// 临时图片路径
+const char* kCapturePath = "/tmp/face_verify.jpg";
 }
 
 FaceVerifier::FaceVerifier(const std::string& cascade_path,
                            const std::string& model_path,
-                           const std::string& labels_path,
-                           int camera_index)
+                           const std::string& labels_path)
     : ready_(false),
-      camera_index_(camera_index),
       recognizer_(cv::face::LBPHFaceRecognizer::create(1, 8, 8, 8, kConfidenceThreshold)) {
   bool ok = true;
 
@@ -63,9 +78,6 @@ bool FaceVerifier::load_labels(const std::string& labels_path) {
 
   label_to_card_.clear();
 
-  // 文件格式示例：
-  // 1,alice_card
-  // 2,bob_card
   std::string line;
   while (std::getline(fin, line)) {
     if (line.empty()) {
@@ -94,17 +106,16 @@ bool FaceVerifier::load_labels(const std::string& labels_path) {
   return !label_to_card_.empty();
 }
 
-std::vector<cv::Rect> FaceVerifier::detect_faces(const cv::Mat& frame_gray){
+std::vector<cv::Rect> FaceVerifier::detect_faces(const cv::Mat& frame_gray) {
   std::vector<cv::Rect> faces;
   face_cascade_.detectMultiScale(
       frame_gray,
       faces,
-      1.1,              // scaleFactor
-      4,                // minNeighbors
+      1.1,
+      4,
       0,
-      cv::Size(60, 60), // minSize
-      cv::Size()        // maxSize
-  );
+      cv::Size(60, 60),
+      cv::Size());
   return faces;
 }
 
@@ -121,21 +132,44 @@ bool FaceVerifier::verify(const std::string& card_id) {
     return false;
   }
 
-  cv::VideoCapture cap(camera_index_);
-  if (!cap.isOpened()) {
-    std::cerr << "[FACE] Failed to open camera index " << camera_index_ << "\n";
-    return false;
-  }
-
   std::cout << "[FACE] Face verification started for card_id: " << card_id << "\n";
 
+  const auto start = std::chrono::steady_clock::now();
   int matched_frames = 0;
+  int capture_count = 0;
 
-  for (int i = 0; i < kCaptureFrames; ++i) {
-    cv::Mat frame;
-    cap >> frame;
+  while (capture_count < kMaxCaptures) {
+    const auto now = std::chrono::steady_clock::now();
+    const auto elapsed_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
+
+    if (elapsed_ms >= kVerificationWindowMs) {
+      break;
+    }
+
+    // 删除旧图，避免误读
+    std::remove(kCapturePath);
+
+    // 用 rpicam-still 拍一张
+    // -n: no preview
+    // -t 300: 快速拍照
+    // --immediate: 尽快完成
+    const std::string cmd =
+        "rpicam-still -n --immediate -t 300 -o " + std::string(kCapturePath) + " >/dev/null 2>&1";
+
+    const int ret = std::system(cmd.c_str());
+    ++capture_count;
+
+    if (ret != 0) {
+      std::cerr << "[FACE] Capture command failed at frame " << capture_count << "\n";
+      std::this_thread::sleep_for(std::chrono::milliseconds(kCaptureIntervalMs));
+      continue;
+    }
+
+    cv::Mat frame = cv::imread(kCapturePath, cv::IMREAD_COLOR);
     if (frame.empty()) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(30));
+      std::cerr << "[FACE] Failed to read captured image at frame " << capture_count << "\n";
+      std::this_thread::sleep_for(std::chrono::milliseconds(kCaptureIntervalMs));
       continue;
     }
 
@@ -145,14 +179,16 @@ bool FaceVerifier::verify(const std::string& card_id) {
     auto faces = detect_faces(gray);
 
     if (faces.empty()) {
-      std::cout << "[FACE] No face detected in frame " << i + 1 << "\n";
-      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      std::cout << "[FACE] No face detected in capture " << capture_count << "\n";
+      std::this_thread::sleep_for(std::chrono::milliseconds(kCaptureIntervalMs));
       continue;
     }
 
-    std::cout << "[FACE] Detected " << faces.size() << " face(s) in frame " << i + 1 << "\n";
+    std::cout << "[FACE] Detected " << faces.size()
+              << " face(s) in capture " << capture_count << "\n";
 
-    // 多人脸：逐个识别
+    bool matched_this_capture = false;
+
     for (const auto& face_rect : faces) {
       cv::Mat face_img = preprocess_face(gray, face_rect);
 
@@ -177,20 +213,24 @@ bool FaceVerifier::verify(const std::string& card_id) {
                 << ", mapped_card=" << predicted_card
                 << ", confidence=" << confidence << "\n";
 
-      // 注意：LBPH 的 confidence 本质上是距离，通常越小越像
       if (predicted_card == card_id && confidence <= kConfidenceThreshold) {
-        ++matched_frames;
-        std::cout << "[FACE] Match accepted (" << matched_frames
-                  << "/" << kRequiredMatches << ")\n";
-
-        if (matched_frames >= kRequiredMatches) {
-          std::cout << "[FACE] Face verification PASSED.\n";
-          return true;
-        }
+        matched_this_capture = true;
+        break;
       }
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    if (matched_this_capture) {
+      ++matched_frames;
+      std::cout << "[FACE] Match accepted (" << matched_frames
+                << "/" << kRequiredMatches << ")\n";
+
+      if (matched_frames >= kRequiredMatches) {
+        std::cout << "[FACE] Face verification PASSED.\n";
+        return true;
+      }
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(kCaptureIntervalMs));
   }
 
   std::cout << "[FACE] Face verification FAILED.\n";

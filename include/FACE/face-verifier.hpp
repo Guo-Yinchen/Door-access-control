@@ -2,7 +2,6 @@
 
 #include <opencv2/core.hpp>
 #include <opencv2/objdetect.hpp>
-#include <opencv2/videoio.hpp>
 #include <opencv2/face.hpp>
 
 #include <map>
@@ -13,13 +12,9 @@ class FaceVerifier {
 public:
   FaceVerifier(const std::string& cascade_path = "models/haarcascade_frontalface_default.xml",
                const std::string& model_path   = "models/lbph_faces.yml",
-               const std::string& labels_path  = "models/face_labels.txt",
-               int camera_index = 0);
+               const std::string& labels_path  = "models/face_labels.txt");
 
-  // 与你当前 main.cpp 保持一致：
-  // card_id 代表刷卡后的用户标识
   bool verify(const std::string& card_id);
-
   bool is_ready() const;
 
 private:
@@ -29,11 +24,9 @@ private:
 
 private:
   bool ready_;
-  int camera_index_;
 
   cv::CascadeClassifier face_cascade_;
   cv::Ptr<cv::face::LBPHFaceRecognizer> recognizer_;
 
-  // label -> card_id
   std::map<int, std::string> label_to_card_;
 };
