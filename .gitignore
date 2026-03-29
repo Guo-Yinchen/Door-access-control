@@ -19,3 +19,7 @@ logs/
 # vscode (可选：只保留 tasks.json 就别忽略整个 .vscode)
 .vscode/settings.json
 .vscode/launch.json
+
+# training data and build artifacts
+dataset/
+build-training/
