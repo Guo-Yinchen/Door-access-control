@@ -94,7 +94,7 @@ bool FaceVerifier::load_labels(const std::string& labels_path) {
   return !label_to_card_.empty();
 }
 
-std::vector<cv::Rect> FaceVerifier::detect_faces(const cv::Mat& frame_gray) const {
+std::vector<cv::Rect> FaceVerifier::detect_faces(const cv::Mat& frame_gray){
   std::vector<cv::Rect> faces;
   face_cascade_.detectMultiScale(
       frame_gray,

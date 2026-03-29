@@ -24,7 +24,7 @@ public:
 
 private:
   bool load_labels(const std::string& labels_path);
-  std::vector<cv::Rect> detect_faces(const cv::Mat& frame_gray) const;
+  std::vector<cv::Rect> detect_faces(const cv::Mat& frame_gray);
   cv::Mat preprocess_face(const cv::Mat& gray, const cv::Rect& face_rect) const;
 
 private:
