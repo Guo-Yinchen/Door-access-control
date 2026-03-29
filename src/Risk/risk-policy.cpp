@@ -9,5 +9,5 @@ bool RiskPolicy::require_face_now() const {
 
   // 22:00 以后视为高危时段
   return true;
-  # return local->tm_hour >= 22;
+  // return local->tm_hour >= 22;
 }
