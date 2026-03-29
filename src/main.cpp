@@ -5,6 +5,7 @@
 #include "verifier/verifier.hpp"
 #include "RIsk/risk-policy.hpp"
 #include "FACE/face-verifier.hpp"
+#include "BUZZER/buzzer.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -90,9 +91,11 @@ int main() {
     const int RED_GPIO = 17;
     const int YELLOW_GPIO = 27;
     const int GREEN_GPIO = 22;
+    const int BUZZER_GPIO = 18;
 
     EventBus bus;
     StatusLeds leds(chip, RED_GPIO, YELLOW_GPIO, GREEN_GPIO, "door_control");
+    Buzzer buzzer(chip, BUZZER_GPIO, "door_buzzer");
     MagstripeReader reader;
     CardVerifier verifier("mag-cards_allowlist.txt");
     RiskPolicy risk_policy;
@@ -100,6 +103,7 @@ int main() {
     FaceTaskSlot face_slot;
 
     leds.attach(bus, 2000);
+    buzzer.attach(bus);
 
     std::thread bus_thread([&]() {
       bus.dispatch_loop();
@@ -118,11 +122,11 @@ int main() {
         }
 
         bus.publish(face_ok ? AuthResult::granted : AuthResult::denied,
-                    Target::LED | Target::LOCK);
+                    Target::LED | Target::LOCK | Target::BUZZER);
       }
     });
 
-    bus.publish(AuthResult::idle, Target::LED | Target::LOCK);
+    bus.publish(AuthResult::idle, Target::LED | Target::LOCK | Target::BUZZER);
 
     std::cout << "Swipe card now (Ctrl+C to exit)\n";
 
@@ -139,7 +143,8 @@ int main() {
         std::cout << (card_ok ? "[OK]   " : "[FAIL] ") << card_id << "\n";
 
         if (!card_ok) {
-          bus.publish(AuthResult::denied, Target::LED | Target::LOCK);
+          bus.publish(AuthResult::denied,
+                      Target::LED | Target::LOCK | Target::BUZZER);
           return;
         }
 
@@ -152,11 +157,13 @@ int main() {
           }
 
           std::cout << "[RISK] High-risk condition detected. Face verification required.\n";
-          bus.publish(AuthResult::pending_face, Target::LED | Target::LOCK);
+          bus.publish(AuthResult::pending_face,
+                      Target::LED | Target::LOCK | Target::BUZZER);
           return;
         }
 
-        bus.publish(AuthResult::granted, Target::LED | Target::LOCK);
+        bus.publish(AuthResult::granted,
+                    Target::LED | Target::LOCK | Target::BUZZER);
       });
     });
 
@@ -174,7 +181,7 @@ int main() {
       face_thread.join();
     }
 
-    bus.publish(AuthResult::idle, Target::LED | Target::LOCK);
+    bus.publish(AuthResult::idle, Target::LED | Target::LOCK | Target::BUZZER);
     bus.stop();
 
     if (bus_thread.joinable()) {
@@ -182,6 +189,7 @@ int main() {
     }
 
     leds.all_off();
+    buzzer.all_off();
     return 0;
 
   } catch (const std::exception& e) {
