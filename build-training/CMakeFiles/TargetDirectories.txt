@@ -1,0 +1,3 @@
+/media/allenguo/512GB SSD/Door access/Door-access-control/build-training/CMakeFiles/train_faces.dir
+/media/allenguo/512GB SSD/Door access/Door-access-control/build-training/CMakeFiles/edit_cache.dir
+/media/allenguo/512GB SSD/Door access/Door-access-control/build-training/CMakeFiles/rebuild_cache.dir
