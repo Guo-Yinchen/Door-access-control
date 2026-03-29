@@ -15,6 +15,7 @@ add_executable(door_access_control
   src/verifier/verifier.cpp
   src/Risk/risk-policy.cpp
   src/FACE/face-verifier.cpp
+  src/BUZZER/buzzer.cpp
 )
 
 target_include_directories(door_access_control PRIVATE

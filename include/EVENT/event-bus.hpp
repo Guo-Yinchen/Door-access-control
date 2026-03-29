@@ -21,6 +21,10 @@ inline constexpr uint32_t operator|(Target a, Target b) {
   return static_cast<uint32_t>(a) | static_cast<uint32_t>(b);
 }
 
+inline constexpr uint32_t operator|(uint32_t a, Target b) {
+  return a | static_cast<uint32_t>(b);
+}
+
 struct AuthEvent {
   AuthResult result;
   uint32_t targets;
