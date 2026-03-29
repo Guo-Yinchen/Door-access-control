@@ -24,7 +24,7 @@ StatusLeds::~StatusLeds() {
 void StatusLeds::pending_face() {
   red_.on();
   yellow_.on();
-  green_.off();
+  green_.on();
 }
 void StatusLeds::idle() {
   red_.off();
@@ -117,7 +117,7 @@ void StatusLeds::attach(EventBus& bus, int hold_ms) {
       case AuthResult::pending_face:
         pending_face();
         break;
-        
+
     }
   });
 }
