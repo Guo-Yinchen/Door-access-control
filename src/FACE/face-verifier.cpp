@@ -27,8 +27,8 @@ constexpr int kRequiredMatches = 3;
 // 最多 16 张
 constexpr int kMaxCaptures = 16;
 
-// LBPH 阈值，越小越严格
-constexpr double kConfidenceThreshold = 65.0;
+// 先放宽一点，方便调试
+constexpr double kConfidenceThreshold = 90.0;
 
 // 临时图片路径
 const char* kCapturePath = "/tmp/face_verify.jpg";
@@ -147,15 +147,13 @@ bool FaceVerifier::verify(const std::string& card_id) {
       break;
     }
 
-    // 删除旧图，避免误读
+    // 删除旧图，避免误读旧文件
     std::remove(kCapturePath);
 
     // 用 rpicam-still 拍一张
-    // -n: no preview
-    // -t 300: 快速拍照
-    // --immediate: 尽快完成
     const std::string cmd =
-        "rpicam-still -n --immediate -t 300 -o " + std::string(kCapturePath) + " >/dev/null 2>&1";
+        "rpicam-still -n -t 800 --width 640 --height 480 -o " +
+        std::string(kCapturePath) + " >/dev/null 2>&1";
 
     const int ret = std::system(cmd.c_str());
     ++capture_count;
@@ -202,8 +200,12 @@ bool FaceVerifier::verify(const std::string& card_id) {
         continue;
       }
 
+      std::cout << "[FACE] raw predicted_label=" << predicted_label
+                << ", confidence=" << confidence << "\n";
+
       auto it = label_to_card_.find(predicted_label);
       if (it == label_to_card_.end()) {
+        std::cout << "[FACE] predicted label not found in label map\n";
         continue;
       }
 
