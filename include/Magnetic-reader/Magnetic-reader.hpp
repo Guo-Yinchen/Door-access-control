@@ -6,7 +6,7 @@
 class MagstripeReader {
 public:
   struct Config {
-    std::string device = "/dev/input/event9";
+    std::string device = "/dev/input/by-id/usb-DECETECH.COM.CN_DK_131K-UL_V7.76-event-kbd";
     bool grab_exclusive = false;
   };
 
