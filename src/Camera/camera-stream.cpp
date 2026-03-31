@@ -29,7 +29,10 @@ std::size_t find_marker(const std::vector<unsigned char>& buf,
 }
 } // namespace
 
-CameraStream::CameraStream(Config config)
+CameraStream::CameraStream()
+    : cfg_{} {}
+
+CameraStream::CameraStream(const Config& config)
     : cfg_(config) {}
 
 CameraStream::~CameraStream() {

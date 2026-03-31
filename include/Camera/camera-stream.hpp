@@ -20,7 +20,8 @@ public:
     int camera_index{0};
   };
 
-  explicit CameraStream(Config config = {});
+  CameraStream();
+  explicit CameraStream(const Config& config);
   ~CameraStream();
 
   CameraStream(const CameraStream&) = delete;

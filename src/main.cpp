@@ -116,6 +116,7 @@ int main() {
 
     if (!camera_stream.start()) {
       std::cerr << "[CAM] Failed to start CSI camera stream.\n";
+      return 1; 
     }
 
     FaceVerifier face_verifier(camera_stream);
