@@ -1,5 +1,6 @@
 #include "FACE/face-verifier.hpp"
 
+#include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
 #include <cfloat>
@@ -7,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <unistd.h>
 
 namespace {
 constexpr int kFaceWidth = 160;
@@ -17,7 +19,8 @@ constexpr int kFrameWaitTimeoutMs = 250;
 constexpr int kRequiredMatches = 3;
 constexpr int kMaxFramesToCheck = 60;
 constexpr double kConfidenceThreshold = 90.0;
-} // namespace
+constexpr int kDebugDumpFrames = 6;
+}
 
 FaceVerifier::FaceVerifier(CameraStream& camera,
                            const std::string& cascade_path,
@@ -27,6 +30,14 @@ FaceVerifier::FaceVerifier(CameraStream& camera,
       ready_(false),
       recognizer_(cv::face::LBPHFaceRecognizer::create(1, 8, 8, 8, DBL_MAX)) {
   bool ok = true;
+
+  char cwd[1024] = {0};
+  if (::getcwd(cwd, sizeof(cwd))) {
+    std::cout << "[FACE] cwd=" << cwd << "\n";
+  }
+  std::cout << "[FACE] cascade_path=" << cascade_path << "\n";
+  std::cout << "[FACE] model_path=" << model_path << "\n";
+  std::cout << "[FACE] labels_path=" << labels_path << "\n";
 
   if (!face_cascade_.load(cascade_path)) {
     std::cerr << "[FACE] Failed to load cascade: " << cascade_path << "\n";
@@ -43,6 +54,17 @@ FaceVerifier::FaceVerifier(CameraStream& camera,
 
   if (!load_labels(labels_path)) {
     std::cerr << "[FACE] Failed to load labels: " << labels_path << "\n";
+    ok = false;
+  }
+
+  std::cout << "[FACE] recognizer empty=" << recognizer_->empty() << "\n";
+  std::cout << "[FACE] recognizer threshold=" << recognizer_->getThreshold() << "\n";
+  std::cout << "[FACE] recognizer histograms=" << recognizer_->getHistograms().size() << "\n";
+  std::cout << "[FACE] recognizer labels total=" << recognizer_->getLabels().total() << "\n";
+  std::cout << "[FACE] label map size=" << label_to_card_.size() << "\n";
+
+  if (recognizer_->empty() || recognizer_->getHistograms().empty() || recognizer_->getLabels().total() == 0) {
+    std::cerr << "[FACE] LBPH model appears empty after loading.\n";
     ok = false;
   }
 
@@ -107,7 +129,8 @@ std::vector<cv::Rect> FaceVerifier::detect_faces(const cv::Mat& frame_gray) {
 }
 
 cv::Mat FaceVerifier::preprocess_face(const cv::Mat& gray, const cv::Rect& face_rect) const {
-  cv::Mat roi = gray(face_rect).clone();
+  cv::Rect bounded = face_rect & cv::Rect(0, 0, gray.cols, gray.rows);
+  cv::Mat roi = gray(bounded).clone();
   cv::resize(roi, roi, cv::Size(kFaceWidth, kFaceHeight));
   cv::equalizeHist(roi, roi);
   return roi;
@@ -129,6 +152,7 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
   const auto start = std::chrono::steady_clock::now();
   int matched_frames = 0;
   int checked_frames = 0;
+  int dumped_frames = 0;
 
   while (checked_frames < kMaxFramesToCheck) {
     if (stop_requested.load()) {
@@ -146,11 +170,7 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
 
     cv::Mat frame;
     const bool got_frame = camera_.wait_for_frame(frame, stop_requested, kFrameWaitTimeoutMs);
-    if (!got_frame) {
-      continue;
-    }
-
-    if (frame.empty()) {
+    if (!got_frame || frame.empty()) {
       continue;
     }
 
@@ -178,6 +198,16 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
       }
 
       cv::Mat face_img = preprocess_face(gray, face_rect);
+
+      if (dumped_frames < kDebugDumpFrames) {
+        const std::string frame_path = "/tmp/face_debug_frame_" + std::to_string(dumped_frames) + ".png";
+        const std::string roi_path = "/tmp/face_debug_roi_" + std::to_string(dumped_frames) + ".png";
+        cv::imwrite(frame_path, frame);
+        cv::imwrite(roi_path, face_img);
+        std::cout << "[FACE] dumped debug images: " << frame_path
+                  << " and " << roi_path << "\n";
+        ++dumped_frames;
+      }
 
       int predicted_label = -1;
       double confidence = DBL_MAX;
