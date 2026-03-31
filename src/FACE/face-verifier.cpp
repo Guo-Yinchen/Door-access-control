@@ -1,34 +1,30 @@
 #include "FACE/face-verifier.hpp"
 
-#include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
 #include <cfloat>
 #include <chrono>
-#include <cstdio>
-#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <thread>
 
 namespace {
 constexpr int kFaceWidth = 160;
 constexpr int kFaceHeight = 160;
 
 constexpr int kVerificationWindowMs = 8000;
-constexpr int kCaptureIntervalMs = 100;
+constexpr int kFrameWaitTimeoutMs = 250;
 constexpr int kRequiredMatches = 3;
-constexpr int kMaxCaptures = 16;
+constexpr int kMaxFramesToCheck = 60;
 constexpr double kConfidenceThreshold = 90.0;
+} // namespace
 
-const char* kCapturePath = "/tmp/face_verify.jpg";
-}
-
-FaceVerifier::FaceVerifier(const std::string& cascade_path,
+FaceVerifier::FaceVerifier(CameraStream& camera,
+                           const std::string& cascade_path,
                            const std::string& model_path,
                            const std::string& labels_path)
-    : ready_(false),
+    : camera_(camera),
+      ready_(false),
       recognizer_(cv::face::LBPHFaceRecognizer::create(1, 8, 8, 8, DBL_MAX)) {
   bool ok = true;
 
@@ -123,13 +119,18 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
     return false;
   }
 
+  if (!camera_.is_running()) {
+    std::cerr << "[FACE] Camera stream is not running.\n";
+    return false;
+  }
+
   std::cout << "[FACE] Face verification started for card_id: " << card_id << "\n";
 
   const auto start = std::chrono::steady_clock::now();
   int matched_frames = 0;
-  int capture_count = 0;
+  int checked_frames = 0;
 
-  while (capture_count < kMaxCaptures) {
+  while (checked_frames < kMaxFramesToCheck) {
     if (stop_requested.load()) {
       std::cout << "[FACE] Face verification aborted by stop request.\n";
       return false;
@@ -143,32 +144,17 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
       break;
     }
 
-    std::remove(kCapturePath);
-
-    const std::string cmd =
-        "rpicam-still -n -t 800 --width 640 --height 480 -o " +
-        std::string(kCapturePath) + " >/dev/null 2>&1";
-
-    const int ret = std::system(cmd.c_str());
-    ++capture_count;
-
-    if (stop_requested.load()) {
-      std::cout << "[FACE] Face verification aborted by stop request.\n";
-      return false;
-    }
-
-    if (ret != 0) {
-      std::cerr << "[FACE] Capture command failed at frame " << capture_count << "\n";
-      std::this_thread::sleep_for(std::chrono::milliseconds(kCaptureIntervalMs));
+    cv::Mat frame;
+    const bool got_frame = camera_.wait_for_frame(frame, stop_requested, kFrameWaitTimeoutMs);
+    if (!got_frame) {
       continue;
     }
 
-    cv::Mat frame = cv::imread(kCapturePath, cv::IMREAD_COLOR);
     if (frame.empty()) {
-      std::cerr << "[FACE] Failed to read captured image at frame " << capture_count << "\n";
-      std::this_thread::sleep_for(std::chrono::milliseconds(kCaptureIntervalMs));
       continue;
     }
+
+    ++checked_frames;
 
     cv::Mat gray;
     cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
@@ -176,15 +162,14 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
     auto faces = detect_faces(gray);
 
     if (faces.empty()) {
-      std::cout << "[FACE] No face detected in capture " << capture_count << "\n";
-      std::this_thread::sleep_for(std::chrono::milliseconds(kCaptureIntervalMs));
+      std::cout << "[FACE] No face detected in frame " << checked_frames << "\n";
       continue;
     }
 
     std::cout << "[FACE] Detected " << faces.size()
-              << " face(s) in capture " << capture_count << "\n";
+              << " face(s) in frame " << checked_frames << "\n";
 
-    bool matched_this_capture = false;
+    bool matched_this_frame = false;
 
     for (const auto& face_rect : faces) {
       if (stop_requested.load()) {
@@ -225,12 +210,12 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
                 << ", confidence=" << confidence << "\n";
 
       if (predicted_card == card_id && confidence <= kConfidenceThreshold) {
-        matched_this_capture = true;
+        matched_this_frame = true;
         break;
       }
     }
 
-    if (matched_this_capture) {
+    if (matched_this_frame) {
       ++matched_frames;
       std::cout << "[FACE] Match accepted (" << matched_frames
                 << "/" << kRequiredMatches << ")\n";
@@ -240,8 +225,6 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
         return true;
       }
     }
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(kCaptureIntervalMs));
   }
 
   std::cout << "[FACE] Face verification FAILED.\n";

@@ -4,6 +4,7 @@
 #include "Magnetic-reader/Magnetic-reader.hpp"
 #include "verifier/verifier.hpp"
 #include "RIsk/risk-policy.hpp"
+#include "Camera/camera-stream.hpp"
 #include "FACE/face-verifier.hpp"
 #include "BUZZER/buzzer.hpp"
 #include "SERVO/servo-lock.hpp"
@@ -104,7 +105,20 @@ int main() {
     MagstripeReader reader;
     CardVerifier verifier("mag-cards_allowlist.txt");
     RiskPolicy risk_policy;
-    FaceVerifier face_verifier;
+
+    CameraStream camera_stream(CameraStream::Config{
+        640,   // width
+        480,   // height
+        10,    // fps
+        200,   // read_timeout_ms
+        0      // camera_index
+    });
+
+    if (!camera_stream.start()) {
+      std::cerr << "[CAM] Failed to start CSI camera stream.\n";
+    }
+
+    FaceVerifier face_verifier(camera_stream);
     FaceTaskSlot face_slot;
 
     leds.attach(bus, 2000);
@@ -180,6 +194,7 @@ int main() {
 
     reader.stop();
     face_slot.shutdown();
+    camera_stream.stop();
 
     if (reader_thread.joinable()) {
       reader_thread.join();

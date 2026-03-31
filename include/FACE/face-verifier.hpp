@@ -1,8 +1,10 @@
 #pragma once
 
+#include "Camera/camera-stream.hpp"
+
 #include <opencv2/core.hpp>
-#include <opencv2/objdetect.hpp>
 #include <opencv2/face.hpp>
+#include <opencv2/objdetect.hpp>
 
 #include <atomic>
 #include <map>
@@ -11,7 +13,8 @@
 
 class FaceVerifier {
 public:
-  FaceVerifier(const std::string& cascade_path = "models/haarcascade_frontalface_default.xml",
+  FaceVerifier(CameraStream& camera,
+               const std::string& cascade_path = "models/haarcascade_frontalface_default.xml",
                const std::string& model_path   = "models/lbph_faces.yml",
                const std::string& labels_path  = "models/face_labels.txt");
 
@@ -24,6 +27,7 @@ private:
   cv::Mat preprocess_face(const cv::Mat& gray, const cv::Rect& face_rect) const;
 
 private:
+  CameraStream& camera_;
   bool ready_;
 
   cv::CascadeClassifier face_cascade_;

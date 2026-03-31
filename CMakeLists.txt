@@ -14,6 +14,7 @@ add_executable(door_access_control
   src/Magnetic-reader/Magnetic-reader.cpp
   src/verifier/verifier.cpp
   src/Risk/risk-policy.cpp
+  src/Camera/camera-stream.cpp
   src/FACE/face-verifier.cpp
   src/BUZZER/buzzer.cpp
   src/SERVO/servo-lock.cpp
