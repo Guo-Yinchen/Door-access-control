@@ -14,12 +14,12 @@ namespace {
 constexpr int kFaceWidth = 160;
 constexpr int kFaceHeight = 160;
 
-constexpr int kVerificationWindowMs = 8000;
+constexpr int kVerificationWindowMs = 6000;
 constexpr int kFrameWaitTimeoutMs = 250;
 constexpr int kRequiredMatches = 3;
 constexpr int kMaxFramesToCheck = 60;
 constexpr double kConfidenceThreshold = 90.0;
-constexpr int kDebugDumpFrames = 6;
+//constexpr int kDebugDumpFrames = 6;
 }
 
 FaceVerifier::FaceVerifier(CameraStream& camera,
@@ -127,15 +127,27 @@ std::vector<cv::Rect> FaceVerifier::detect_faces(const cv::Mat& frame_gray) {
       cv::Size());
   return faces;
 }
-
+// 取出人脸区域，调整为训练时的大小，使用直方图均衡化增强对比度
 cv::Mat FaceVerifier::preprocess_face(const cv::Mat& gray, const cv::Rect& face_rect) const {
-  cv::Rect bounded = face_rect & cv::Rect(0, 0, gray.cols, gray.rows);
+  const int pad_x = face_rect.width / 8;
+  const int pad_y = face_rect.height / 8;
+
+  cv::Rect padded(
+      face_rect.x - pad_x,
+      face_rect.y - pad_y,
+      face_rect.width + pad_x * 2,
+      face_rect.height + pad_y * 2);
+
+  cv::Rect bounded = padded & cv::Rect(0, 0, gray.cols, gray.rows);
+
   cv::Mat roi = gray(bounded).clone();
   cv::resize(roi, roi, cv::Size(kFaceWidth, kFaceHeight));
   cv::equalizeHist(roi, roi);
   return roi;
 }
 
+//统计在验证窗口符合要求的帧数，如果达到要求的匹配数则验证成功，否则失败
+//verify the number of frames that meet the requirements in the verification window, if the required number of matches is reached, the verification is successful, otherwise it fails
 bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& stop_requested) {
   if (!ready_) {
     std::cerr << "[FACE] Verifier not ready.\n";
@@ -151,15 +163,11 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
 
   const auto start = std::chrono::steady_clock::now();
   int matched_frames = 0;
-  int checked_frames = 0;
+  int valid_prediction_frames = 0;
   int dumped_frames = 0;
+  double best_confidence = DBL_MAX;
 
-  while (checked_frames < kMaxFramesToCheck) {
-    if (stop_requested.load()) {
-      std::cout << "[FACE] Face verification aborted by stop request.\n";
-      return false;
-    }
-
+  while (!stop_requested.load()) {
     const auto now = std::chrono::steady_clock::now();
     const auto elapsed_ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
@@ -174,41 +182,31 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
       continue;
     }
 
-    ++checked_frames;
-
     cv::Mat gray;
     cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
 
     auto faces = detect_faces(gray);
-
     if (faces.empty()) {
-      std::cout << "[FACE] No face detected in frame " << checked_frames << "\n";
       continue;
     }
 
-    std::cout << "[FACE] Detected " << faces.size()
-              << " face(s) in frame " << checked_frames << "\n";
+    std::cout << "[FACE] Detected " << faces.size() << " face(s)\n";
 
     bool matched_this_frame = false;
 
     for (const auto& face_rect : faces) {
-      if (stop_requested.load()) {
-        std::cout << "[FACE] Face verification aborted by stop request.\n";
-        return false;
-      }
-
       cv::Mat face_img = preprocess_face(gray, face_rect);
-
+/*测试用 
+测试时用于确认预处理是否合理，LBPH模型是否能正确预测
+For testing,if the LBPH model can predict correctly
       if (dumped_frames < kDebugDumpFrames) {
         const std::string frame_path = "/tmp/face_debug_frame_" + std::to_string(dumped_frames) + ".png";
         const std::string roi_path = "/tmp/face_debug_roi_" + std::to_string(dumped_frames) + ".png";
         cv::imwrite(frame_path, frame);
         cv::imwrite(roi_path, face_img);
-        std::cout << "[FACE] dumped debug images: " << frame_path
-                  << " and " << roi_path << "\n";
         ++dumped_frames;
       }
-
+*/
       int predicted_label = -1;
       double confidence = DBL_MAX;
 
@@ -223,13 +221,13 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
                 << ", confidence=" << confidence << "\n";
 
       if (predicted_label < 0) {
-        std::cout << "[FACE] recognizer returned unknown label\n";
         continue;
       }
 
+      ++valid_prediction_frames;
+
       auto it = label_to_card_.find(predicted_label);
       if (it == label_to_card_.end()) {
-        std::cout << "[FACE] predicted label not found in label map\n";
         continue;
       }
 
@@ -241,6 +239,7 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
 
       if (predicted_card == card_id && confidence <= kConfidenceThreshold) {
         matched_this_frame = true;
+        best_confidence = std::min(best_confidence, confidence);
         break;
       }
     }
@@ -248,7 +247,8 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
     if (matched_this_frame) {
       ++matched_frames;
       std::cout << "[FACE] Match accepted (" << matched_frames
-                << "/" << kRequiredMatches << ")\n";
+                << "/" << kRequiredMatches << "), best_confidence="
+                << best_confidence << "\n";
 
       if (matched_frames >= kRequiredMatches) {
         std::cout << "[FACE] Face verification PASSED.\n";
@@ -257,6 +257,10 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
     }
   }
 
-  std::cout << "[FACE] Face verification FAILED.\n";
+  std::cout << "[FACE] Face verification FAILED. matched_frames="
+            << matched_frames
+            << ", best_confidence=" << best_confidence
+            << ", valid_prediction_frames=" << valid_prediction_frames
+            << "\n";
   return false;
 }
