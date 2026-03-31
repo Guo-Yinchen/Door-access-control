@@ -6,6 +6,7 @@
 #include "RIsk/risk-policy.hpp"
 #include "FACE/face-verifier.hpp"
 #include "BUZZER/buzzer.hpp"
+#include "SERVO/servo-lock.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -92,10 +93,14 @@ int main() {
     const int YELLOW_GPIO = 27;
     const int GREEN_GPIO = 22;
     const int BUZZER_GPIO = 18;
+    const int SERVO_GPIO = 12;
+    const int SERVO2_GPIO = 13;
 
     EventBus bus;
     StatusLeds leds(chip, RED_GPIO, YELLOW_GPIO, GREEN_GPIO, "door_control");
     Buzzer buzzer(chip, BUZZER_GPIO, "door_buzzer");
+    ServoLock lock(chip, SERVO_GPIO, "door_servo", 500, 1500, 20000, 3000);
+    ServoLock lock2(chip, SERVO2_GPIO, "door_servo2", 500, 1500, 20000, 3000);
     MagstripeReader reader;
     CardVerifier verifier("mag-cards_allowlist.txt");
     RiskPolicy risk_policy;
@@ -104,6 +109,8 @@ int main() {
 
     leds.attach(bus, 2000);
     buzzer.attach(bus);
+    lock.attach(bus);
+    lock2.attach(bus);
 
     std::thread bus_thread([&]() {
       bus.dispatch_loop();
