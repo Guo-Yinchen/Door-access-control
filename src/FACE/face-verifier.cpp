@@ -46,6 +46,10 @@ FaceVerifier::FaceVerifier(CameraStream& camera,
 
   try {
     recognizer_->read(model_path);
+
+  // 不让模型内部 threshold 提前把结果打成 unknown(-1)
+  // 统一交给confidence逻辑判断
+    recognizer_->setThreshold(DBL_MAX);
   } catch (const cv::Exception& e) {
     std::cerr << "[FACE] Failed to load LBPH model: " << model_path
               << " | " << e.what() << "\n";
@@ -209,7 +213,8 @@ For testing,if the LBPH model can predict correctly
 */
       int predicted_label = -1;
       double confidence = DBL_MAX;
-
+//预测人脸标签和置信度，预测失败会抛出异常
+//Predict the face label and confidence, an exception will be thrown if the prediction fails
       try {
         recognizer_->predict(face_img, predicted_label, confidence);
       } catch (const cv::Exception& e) {
