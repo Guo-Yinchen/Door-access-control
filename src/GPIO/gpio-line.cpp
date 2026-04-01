@@ -74,7 +74,7 @@ GpioLine::GpioLine(const char* chip_name, int line_offset, const char* consumer)
 GpioLine::~GpioLine() {
   if (req_) {
     // best-effort: set low then release
-    gpiod_line_request_set_value(req_, offset_, GPIOD_LINE_VALUE_INACTIVE);
+    gpiod_line_request_set_value(req_, offset_, GPIOD_LINE_VALUE_ACTIVE);
     gpiod_line_request_release(req_);
     req_ = nullptr;
   }
