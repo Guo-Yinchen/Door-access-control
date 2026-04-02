@@ -47,6 +47,7 @@ static gpiod_line_request* request_output_line(const char* chip_name,
     return nullptr;
   }
 
+  // initial logical output value
   ret = gpiod_line_config_set_output_values(line_cfg, &initial, 1);
   if (ret) {
     gpiod_line_config_free(line_cfg);
