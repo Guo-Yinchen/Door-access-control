@@ -6,11 +6,11 @@
 using namespace std::chrono_literals;
 
 Buzzer::Buzzer(const char* chip_name, int buzzer_gpio, const char* consumer)
-    : buzzer_(chip_name, buzzer_gpio, consumer) {
-  // 低电平触发：
-  // 高电平 = 不响
-  // 低电平 = 响
-  buzzer_.on();
+    : buzzer_(chip_name, buzzer_gpio, consumer, true) {
+  // active-low:
+  // logical ACTIVE   -> physical LOW  -> buzzer sounds
+  // logical INACTIVE -> physical HIGH -> buzzer silent
+  buzzer_.off();  // keep silent at startup
   worker_ = std::thread([this]() { worker_loop(); });
 }
 
@@ -22,8 +22,9 @@ Buzzer::~Buzzer() {
     worker_.join();
   }
 
-  // 退出时保持静音
-  buzzer_.on();
+  // keep silent before underlying line is released
+  //保持静音状态
+  buzzer_.off();
 }
 
 void Buzzer::attach(EventBus& bus) {
@@ -98,37 +99,40 @@ void Buzzer::worker_loop() {
 
     switch (current) {
       case Mode::Granted:
-        // 响一下：低电平触发
-        buzzer_.off();
-        std::this_thread::sleep_for(120ms);
+        // one short beep
+        //  一声短促蜂鸣，持续120ms
         buzzer_.on();
+        std::this_thread::sleep_for(120ms);
+        buzzer_.off();
         break;
 
       case Mode::Denied:
-        // 三声
+        // three beeps
         for (int i = 0; i < 3; ++i) {
-          buzzer_.off();
-          std::this_thread::sleep_for(120ms);
           buzzer_.on();
+          std::this_thread::sleep_for(120ms);
+          buzzer_.off();
           std::this_thread::sleep_for(100ms);
         }
         break;
 
       case Mode::PendingFace:
-        // 两声提示
+        // two short beeps
         for (int i = 0; i < 2; ++i) {
-          buzzer_.off();
-          std::this_thread::sleep_for(80ms);
           buzzer_.on();
+          std::this_thread::sleep_for(80ms);
+          buzzer_.off();
           std::this_thread::sleep_for(120ms);
         }
         break;
 
       case Mode::Off:
       default:
-        // 静音：高电平
-        buzzer_.on();
+        buzzer_.off();
         break;
     }
   }
+
+  // extra safety on worker exit
+  buzzer_.off();
 }
