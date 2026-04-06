@@ -34,9 +34,3 @@ private:
         return std::string(buffer);
     }
 };
-
-void testAccessLogger() {
-    AccessLogger logger;
-    logger.logAccess("12345678", true);
-    logger.logAccess("99999999", false);
-}
