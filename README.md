@@ -106,8 +106,8 @@ Example test output:
 
 Project updates and demo clips will be shared here:
 
-- TikTok: [Coming soon]
-- YouTube: [Coming soon]
+- TikTok: https://www.tiktok.com/@d.a.control
+- YouTube: https://www.youtube.com/channel/UC-V3Io8VhV6NMzuq4lF-zSw
 
 ## Team Contributions
 
