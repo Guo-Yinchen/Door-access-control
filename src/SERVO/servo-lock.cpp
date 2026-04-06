@@ -90,29 +90,49 @@ void ServoLock::schedule_relock() {
 }
 
 void ServoLock::worker_loop() {
+  using clock = std::chrono::steady_clock;
+
+  std::unique_lock<std::mutex> lock(mtx_);
+
   while (!stop_.load()) {
-    int pulse_us = closed_pulse_us_;
+    int pulse_us = current_pulse_us_;
 
-    {
-      std::lock_guard<std::mutex> lock(mtx_);
+    if (relock_pending_ && clock::now() >= relock_deadline_) {
+      current_pulse_us_ = closed_pulse_us_;
+      relock_pending_ = false;
       pulse_us = current_pulse_us_;
+    }
 
-      if (relock_pending_ &&
-          std::chrono::steady_clock::now() >= relock_deadline_) {
+    pulse_us = std::clamp(
+        pulse_us, kMinPulseUs, std::min(kMaxPulseUs, period_us_ - 500));
+    const int low_us = std::max(period_us_ - pulse_us, 1000);
+
+    lock.unlock();
+
+    signal_.on();
+    {
+      std::unique_lock<std::mutex> wait_lock(mtx_);
+      cv_.wait_until(
+          wait_lock,
+          clock::now() + std::chrono::microseconds(pulse_us),
+          [this] { return stop_.load(); });
+    }
+
+    signal_.off();
+    {
+      std::unique_lock<std::mutex> wait_lock(mtx_);
+
+      cv_.wait_until(
+          wait_lock,
+          clock::now() + std::chrono::microseconds(low_us),
+          [this] { return stop_.load() || relock_pending_; });
+
+      if (relock_pending_ && clock::now() >= relock_deadline_) {
         current_pulse_us_ = closed_pulse_us_;
         relock_pending_ = false;
-        pulse_us = current_pulse_us_;
       }
     }
 
-    pulse_us =
-        std::clamp(pulse_us, kMinPulseUs, std::min(kMaxPulseUs, period_us_ - 500));
-    const int low_us = std::max(period_us_ - pulse_us, 1000);
-
-    signal_.on();
-    std::this_thread::sleep_for(std::chrono::microseconds(pulse_us));
-
-    signal_.off();
-    std::this_thread::sleep_for(std::chrono::microseconds(low_us));
+    lock.lock();
   }
 }
