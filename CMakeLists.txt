@@ -26,11 +26,17 @@ target_include_directories(door_access_control PRIVATE
 )
 
 find_library(GPIOD_LIB gpiod)
+
 if (NOT GPIOD_LIB)
-  message(FATAL_ERROR "libgpiod not found. Install it with: sudo apt install libgpiod-dev")
+  message(WARNING "libgpiod not found. Building without GPIO support on this platform.")
 endif()
 
 target_link_libraries(door_access_control PRIVATE
-  ${GPIOD_LIB}
   ${OpenCV_LIBS}
 )
+
+if (GPIOD_LIB)
+  target_link_libraries(door_access_control PRIVATE
+    ${GPIOD_LIB}
+  )
+endif()
