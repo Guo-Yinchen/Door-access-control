@@ -46,9 +46,9 @@ flowchart LR
 | <img src="docs/images/jumperwire.jpg" width="120"> | Jumper Wires (female-to-female, female-to-male) | GPIO and module connections | ¥8 |
 | <img src="docs/images/magstripe.jpg" width="120"> | USB Magstripe Reader | Card input | ¥28 |
 | <img src="docs/images/CAM.jpg" width="120"> | Camera | Face verification | ¥40 |
-| <img src="docs/images/led.jpg" width="120"> | LEDs (Red / Yellow / Green) | System status indication | ¥6 |
-| <img src="docs/images/buzzer.jpg" width="120"> | Buzzer | Alarm feedback | £4 |
-| <img src="docs/images/sg90.jpg" width="120"> | SG90 Servo Motor | Door lock actuation | £6 |
+| <img src="docs/images/LED.jpg" width="120"> | LEDs (Red / Yellow / Green) | System status indication | ¥6 |
+| <img src="docs/images/BUZZER.jpg" width="120"> | Buzzer | Alarm feedback | £4 |
+| <img src="docs/images/SG90.jpg" width="120"> | SG90 Servo Motor | Door lock actuation | £6 |
 
 ## Prerequisites
 
