@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 #include <ctime>
+#include <mutex>
 
 class AccessLogger {
 public:
@@ -9,6 +10,8 @@ public:
         : logFile(filename, std::ios::app) {}
 
     void logAccess(const std::string& cardId, bool granted) {
+        std::lock_guard<std::mutex> lock(logMutex);
+
         if (!logFile.is_open()) {
             std::cerr << "Failed to open log file." << std::endl;
             return;
@@ -22,6 +25,7 @@ public:
 
 private:
     std::ofstream logFile;
+    std::mutex logMutex; 
 
     std::string getCurrentTime() {
         std::time_t now = std::time(nullptr);
