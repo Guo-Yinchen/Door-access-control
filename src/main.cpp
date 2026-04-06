@@ -8,7 +8,7 @@
 #include "FACE/face-verifier.hpp"
 #include "BUZZER/buzzer.hpp"
 #include "SERVO/servo-lock.hpp"
-
+#include "AccessLogger"
 #include <atomic>
 #include <condition_variable>
 #include <csignal>
@@ -105,6 +105,7 @@ int main() {
     MagstripeReader reader;
     CardVerifier verifier("mag-cards_allowlist.txt");
     RiskPolicy risk_policy;
+    AccessLogger logger;
 
     CameraStream camera_stream(CameraStream::Config{
         640,   // width
@@ -136,6 +137,7 @@ int main() {
 
       while (face_slot.wait_and_take(card_id, g_stop_requested)) {
         const bool face_ok = face_verifier.verify(card_id, g_stop_requested);
+        logger.logAccess(card_id, face_ok);
 
         face_slot.finish_current();
 
@@ -160,6 +162,7 @@ int main() {
 
         std::string card_id;
         const bool card_ok = verifier.verify(raw, card_id);
+        logger.logAccess(card_id, card_ok);
 
         std::cout << "[RAW]  " << raw << "\n";
         std::cout << (card_ok ? "[OK]   " : "[FAIL] ") << card_id << "\n";
