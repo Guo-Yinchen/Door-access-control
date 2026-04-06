@@ -34,6 +34,18 @@ flowchart LR
     G --> H[Servo Lock / LEDs]
     D --> I[LEDs / Buzzer]
 ```
+### System Status Indication
+
+The current implementation provides system feedback through LEDs, buzzer, and servo lock control.
+
+| System State | Trigger | LED Behaviour | Buzzer Behaviour | Lock Behaviour |
+|---|---|---|---|---|
+| Idle | System startup / reset | Yellow ON, Red OFF, Green OFF | Off | Locked |
+| Access Denied | Invalid card or failed face verification | Red ON, Yellow ON, Green OFF | Three short beeps | Locked |
+| Face Verification Required | Valid card under high-risk condition | Red ON, Yellow ON, Green ON | Two short beeps | Locked |
+| Access Granted | Valid card accepted or face verification passed | Green ON, Yellow ON, Red OFF | One short beep | Unlocked temporarily, then locked again automatically |
+
+> In the current code, **granted** and **denied** states are held for about **2 seconds** before returning to **Idle** automatically.
 
 ## Hardware
 
