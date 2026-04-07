@@ -9,6 +9,9 @@
 #include "BUZZER/buzzer.hpp"
 #include "SERVO/servo-lock.hpp"
 
+#include "Telemetry/auth-trace.hpp"
+#include <memory>
+
 #include <atomic>
 #include <condition_variable>
 #include <csignal>
