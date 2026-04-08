@@ -21,8 +21,8 @@ struct AuthTrace {
   std::optional<clock::time_point> t_face_result;       // 人脸识别完成
   std::optional<clock::time_point> t_final_feedback;    // 最终反馈发出
 
-  static long long ms_between(clock::time_point a, clock::time_point b) {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count();
+  static long long us_between(clock::time_point a, clock::time_point b) {
+    return std::chrono::duration_cast<std::chrono::microseconds>(b - a).count();
   }
 
   void log_invalid_denied() const {
@@ -31,9 +31,9 @@ struct AuthTrace {
     std::cout
         << "[LATENCY] trace=" << trace_id
         << " path=invalid_card_denied"
-        << " card_verify_ms=" << ms_between(t_card_read, *t_card_verified)
-        << " verify_to_feedback_ms=" << ms_between(*t_card_verified, *t_final_feedback)
-        << " total_ms=" << ms_between(t_card_read, *t_final_feedback)
+        << " card_verify_us=" << us_between(t_card_read, *t_card_verified)
+        << " verify_to_feedback_us=" << us_between(*t_card_verified, *t_final_feedback)
+        << " total_us=" << us_between(t_card_read, *t_final_feedback)
         << "\n";
   }
 
@@ -43,9 +43,9 @@ struct AuthTrace {
     std::cout
         << "[LATENCY] trace=" << trace_id
         << " path=valid_card_granted"
-        << " card_verify_ms=" << ms_between(t_card_read, *t_card_verified)
-        << " verify_to_feedback_ms=" << ms_between(*t_card_verified, *t_final_feedback)
-        << " total_ms=" << ms_between(t_card_read, *t_final_feedback)
+        << " card_verify_us=" << us_between(t_card_read, *t_card_verified)
+        << " verify_to_feedback_us=" << us_between(*t_card_verified, *t_final_feedback)
+        << " total_us=" << us_between(t_card_read, *t_final_feedback)
         << "\n";
   }
 
@@ -55,9 +55,9 @@ struct AuthTrace {
     std::cout
         << "[LATENCY] trace=" << trace_id
         << " path=high_risk_pending_face"
-        << " card_verify_ms=" << ms_between(t_card_read, *t_card_verified)
-        << " verify_to_pending_ms=" << ms_between(*t_card_verified, *t_pending_face)
-        << " total_to_pending_ms=" << ms_between(t_card_read, *t_pending_face)
+        << " card_verify_us=" << us_between(t_card_read, *t_card_verified)
+        << " verify_to_pending_us=" << us_between(*t_card_verified, *t_pending_face)
+        << " total_to_pending_us=" << us_between(t_card_read, *t_pending_face)
         << "\n";
   }
 
@@ -67,21 +67,21 @@ struct AuthTrace {
     std::cout
         << "[LATENCY] trace=" << trace_id
         << " path=" << (granted ? "face_final_granted" : "face_final_denied")
-        << " card_verify_ms=" << ms_between(t_card_read, *t_card_verified)
-        << " verify_to_pending_ms=" << ms_between(*t_card_verified, *t_pending_face);
+        << " card_verify_us=" << us_between(t_card_read, *t_card_verified)
+        << " verify_to_pending_us=" << us_between(*t_card_verified, *t_pending_face);
 
     if (t_face_task_taken) {
       std::cout
-          << " pending_queue_ms=" << ms_between(*t_pending_face, *t_face_task_taken)
-          << " face_verify_ms=" << ms_between(*t_face_task_taken, *t_face_result);
+          << " pending_queue_us=" << us_between(*t_pending_face, *t_face_task_taken)
+          << " face_verify_us=" << us_between(*t_face_task_taken, *t_face_result);
     } else {
       std::cout
-          << " pending_to_face_result_ms=" << ms_between(*t_pending_face, *t_face_result);
+          << " pending_to_face_result_us=" << us_between(*t_pending_face, *t_face_result);
     }
 
     std::cout
-        << " face_result_to_feedback_ms=" << ms_between(*t_face_result, *t_final_feedback)
-        << " total_ms=" << ms_between(t_card_read, *t_final_feedback)
+        << " face_result_to_feedback_us=" << us_between(*t_face_result, *t_final_feedback)
+        << " total_us=" << us_between(t_card_read, *t_final_feedback)
         << "\n";
   }
 };
