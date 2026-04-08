@@ -31,7 +31,8 @@ public:
 
 private:
   void worker_loop();
-  void schedule_relock();
+  void schedule_relock_locked();
+  void emit_pwm_burst(int pulse_us, int burst_ms = 400);
 
 private:
   GpioLine signal_;
@@ -40,13 +41,13 @@ private:
   const int open_pulse_us_;
   const int period_us_;
 
+  int hold_ms_;
+  bool target_open_{false};
+  bool relock_pending_{false};
+  std::chrono::steady_clock::time_point relock_deadline_{};
+
   std::atomic<bool> stop_{false};
   std::mutex mtx_;
   std::condition_variable cv_;
   std::thread worker_;
-
-  int current_pulse_us_;
-  int hold_ms_;
-  bool relock_pending_{false};
-  std::chrono::steady_clock::time_point relock_deadline_{};
 };

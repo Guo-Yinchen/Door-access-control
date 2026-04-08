@@ -1,13 +1,16 @@
-#include "LED/led-v1.hpp"
 #include "EVENT/event-bus.hpp"
 #include "AuthResult/AuthResult.hpp"
-#include "Magnetic-reader/Magnetic-reader.hpp"
 #include "verifier/verifier.hpp"
 #include "RIsk/risk-policy.hpp"
 #include "Camera/camera-stream.hpp"
 #include "FACE/face-verifier.hpp"
+
+#if ENABLE_GPIO
+#include "LED/led-v1.hpp"
+#include "Magnetic-reader/Magnetic-reader.hpp"
 #include "BUZZER/buzzer.hpp"
 #include "SERVO/servo-lock.hpp"
+#endif
 
 #include <atomic>
 #include <condition_variable>
@@ -88,6 +91,7 @@ int main() {
   try {
     std::signal(SIGINT, handle_sigint);
 
+#if ENABLE_GPIO
     const char* chip = "gpiochip0";
 
     const int RED_GPIO = 17;
@@ -96,36 +100,43 @@ int main() {
     const int BUZZER_GPIO = 18;
     const int SERVO_GPIO = 12;
     const int SERVO2_GPIO = 13;
+#endif
 
     EventBus bus;
+
+#if ENABLE_GPIO
     StatusLeds leds(chip, RED_GPIO, YELLOW_GPIO, GREEN_GPIO, "door_control");
     Buzzer buzzer(chip, BUZZER_GPIO, "door_buzzer");
-    ServoLock lock(chip, SERVO_GPIO, "door_servo", 500, 1500, 20000, 3000);
-    ServoLock lock2(chip, SERVO2_GPIO, "door_servo2", 500, 1500, 20000, 3000);
+    ServoLock lock(chip, 12, "door_servo", 1500, 2300, 20000, 3000);
+    ServoLock lock2(chip, 13, "door_servo2", 1500, 700, 20000, 3000);
     MagstripeReader reader;
+#endif
+
     CardVerifier verifier("mag-cards_allowlist.txt");
     RiskPolicy risk_policy;
 
     CameraStream camera_stream(CameraStream::Config{
-        640,   // width
-        480,   // height
-        10,    // fps
-        200,   // read_timeout_ms
-        0      // camera_index
+        640,
+        480,
+        10,
+        200,
+        0
     });
 
     if (!camera_stream.start()) {
       std::cerr << "[CAM] Failed to start CSI camera stream.\n";
-      return 1; 
+      return 1;
     }
 
     FaceVerifier face_verifier(camera_stream);
     FaceTaskSlot face_slot;
 
+#if ENABLE_GPIO
     leds.attach(bus, 2000);
     buzzer.attach(bus);
     lock.attach(bus);
     lock2.attach(bus);
+#endif
 
     std::thread bus_thread([&]() {
       bus.dispatch_loop();
@@ -143,15 +154,23 @@ int main() {
           break;
         }
 
+#if ENABLE_GPIO
         bus.publish(face_ok ? AuthResult::granted : AuthResult::denied,
                     Target::LED | Target::LOCK | Target::BUZZER);
+#else
+        (void)face_ok;
+#endif
       }
     });
 
+#if ENABLE_GPIO
     bus.publish(AuthResult::idle, Target::LED | Target::LOCK | Target::BUZZER);
-
     std::cout << "Swipe card now (Ctrl+C to exit)\n";
+#else
+    std::cout << "GPIO disabled build running (Ctrl+C to exit)\n";
+#endif
 
+#if ENABLE_GPIO
     std::thread reader_thread([&]() {
       reader.run([&](const std::string& raw) {
         if (g_stop_requested.load()) {
@@ -188,31 +207,42 @@ int main() {
                     Target::LED | Target::LOCK | Target::BUZZER);
       });
     });
+#endif
 
     while (!g_stop_requested.load()) {
       ::pause();
     }
 
+#if ENABLE_GPIO
     reader.stop();
+#endif
     face_slot.shutdown();
     camera_stream.stop();
 
+#if ENABLE_GPIO
     if (reader_thread.joinable()) {
       reader_thread.join();
     }
+#endif
+
     if (face_thread.joinable()) {
       face_thread.join();
     }
 
+#if ENABLE_GPIO
     bus.publish(AuthResult::idle, Target::LED | Target::LOCK | Target::BUZZER);
+#endif
     bus.stop();
 
     if (bus_thread.joinable()) {
       bus_thread.join();
     }
 
+#if ENABLE_GPIO
     leds.all_off();
     buzzer.all_off();
+#endif
+
     return 0;
 
   } catch (const std::exception& e) {
