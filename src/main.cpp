@@ -27,7 +27,7 @@
 
 namespace {
 std::atomic<bool> g_stop_requested{false};
-
+// 处理 SIGINT 信号，优雅退出
 void handle_sigint(int) {
   g_stop_requested.store(true);
 }
@@ -36,7 +36,7 @@ struct FaceRequest {
   std::string card_id;
   std::shared_ptr<AuthTrace> trace;
 };
-
+// 管理人脸识别任务的提交和执行，确保同一时间只有一个人脸识别任务在进行
 class FaceTaskSlot {
 public:
   bool submit_if_idle(FaceRequest req) {
@@ -53,7 +53,7 @@ public:
     cv_.notify_one();
     return true;
   }
-
+// 等待并获取一个人脸识别任务，如果 stop_requested 被设置则返回 false
   bool wait_and_take(FaceRequest& req, const std::atomic<bool>& stop_requested) {
     std::unique_lock<std::mutex> lock(mtx_);
 
@@ -95,6 +95,7 @@ private:
 };
 } // namespace
 
+
 int main() {
   try {
     std::signal(SIGINT, handle_sigint);
@@ -102,7 +103,7 @@ int main() {
 
 #if ENABLE_GPIO
     const char* chip = "gpiochip0";
-
+// GPIO 引脚定义，基于 Raspberry Pi的 BCM 编号
     const int RED_GPIO = 17;
     const int YELLOW_GPIO = 27;
     const int GREEN_GPIO = 22;
@@ -123,13 +124,13 @@ int main() {
 
     CardVerifier verifier("mag-cards_allowlist.txt");
     RiskPolicy risk_policy;
-
+// 初始化 CSI 摄像头流和人脸识别组件
     CameraStream camera_stream(CameraStream::Config{
-        640,
-        480,
-        10,
-        200,
-        0
+        640,// width
+        480,// height
+        10, // fps
+        200, // read_timeout_ms
+        0// camera_index
     });
 
     if (!camera_stream.start()) {
@@ -155,6 +156,11 @@ int main() {
       FaceRequest req;
 
       while (face_slot.wait_and_take(req, g_stop_requested)) {
+        const auto face_start = AuthTrace::clock::now();
+        if (req.trace) {
+          req.trace->t_face_task_taken = face_start;
+        }
+// 执行人脸识别
         const bool face_ok = face_verifier.verify(req.card_id, g_stop_requested);
 
         const auto now = AuthTrace::clock::now();
@@ -218,6 +224,7 @@ int main() {
 
         if (risk_policy.require_face_now()) {
           trace->high_risk = true;
+          trace->t_pending_face = AuthTrace::clock::now();
 
           const bool submitted = face_slot.submit_if_idle(FaceRequest{card_id, trace});
           if (!submitted) {
@@ -225,7 +232,6 @@ int main() {
             return;
           }
 
-          trace->t_pending_face = AuthTrace::clock::now();
           trace->log_pending_face();
 
           std::cout << "[RISK] High-risk condition detected. Face verification required.\n";
@@ -246,7 +252,6 @@ int main() {
     while (!g_stop_requested.load()) {
       ::pause();
     }
-
 #if ENABLE_GPIO
     reader.stop();
 #endif
