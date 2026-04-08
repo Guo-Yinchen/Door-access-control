@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EVENT/event-bus.hpp"
+#include "GPIO/gpio-line.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -31,14 +32,16 @@ public:
 private:
   void worker_loop();
   void schedule_relock_locked();
-  void move_and_release(bool open);
+  void emit_pwm_burst(int pulse_us, int burst_ms = 400);
 
 private:
-  int signal_gpio_;
+  GpioLine signal_;
+
   const int closed_pulse_us_;
   const int open_pulse_us_;
-  int hold_ms_;
+  const int period_us_;
 
+  int hold_ms_;
   bool target_open_{false};
   bool relock_pending_{false};
   std::chrono::steady_clock::time_point relock_deadline_{};
@@ -47,7 +50,4 @@ private:
   std::mutex mtx_;
   std::condition_variable cv_;
   std::thread worker_;
-
-  static std::mutex pigpio_mtx_;
-  static int pigpio_users_;
 };

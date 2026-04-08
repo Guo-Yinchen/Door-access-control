@@ -1,20 +1,13 @@
 #include "SERVO/servo-lock.hpp"
 
-#include <pigpio.h>
-
 #include <algorithm>
 #include <chrono>
-#include <stdexcept>
 #include <thread>
 
 namespace {
 constexpr int kMinPulseUs = 500;
 constexpr int kMaxPulseUs = 2400;
-constexpr auto kSettleTime = std::chrono::milliseconds(400);
 }
-
-std::mutex ServoLock::pigpio_mtx_;
-int ServoLock::pigpio_users_ = 0;
 
 ServoLock::ServoLock(const char* chip_name,
                      int signal_gpio,
@@ -23,25 +16,11 @@ ServoLock::ServoLock(const char* chip_name,
                      int open_pulse_us,
                      int period_us,
                      int unlock_hold_ms)
-    : signal_gpio_(signal_gpio),
+    : signal_(chip_name, signal_gpio, consumer),
       closed_pulse_us_(std::clamp(closed_pulse_us, kMinPulseUs, kMaxPulseUs)),
       open_pulse_us_(std::clamp(open_pulse_us, kMinPulseUs, kMaxPulseUs)),
+      period_us_(std::max(period_us, 5000)),
       hold_ms_(std::max(unlock_hold_ms, 0)) {
-  (void)chip_name;
-  (void)consumer;
-  (void)period_us;
-
-  std::lock_guard<std::mutex> guard(pigpio_mtx_);
-  if (pigpio_users_ == 0) {
-    if (gpioInitialise() < 0) {
-      throw std::runtime_error("pigpio initialisation failed");
-    }
-  }
-  ++pigpio_users_;
-
-  gpioSetMode(signal_gpio_, PI_OUTPUT);
-  gpioServo(signal_gpio_, 0);
-
   worker_ = std::thread([this]() { worker_loop(); });
 }
 
@@ -53,13 +32,7 @@ ServoLock::~ServoLock() {
     worker_.join();
   }
 
-  gpioServo(signal_gpio_, 0);
-
-  std::lock_guard<std::mutex> guard(pigpio_mtx_);
-  --pigpio_users_;
-  if (pigpio_users_ == 0) {
-    gpioTerminate();
-  }
+  signal_.off();
 }
 
 void ServoLock::attach(EventBus& bus) {
@@ -114,14 +87,24 @@ void ServoLock::schedule_relock_locked() {
       std::chrono::steady_clock::now() + std::chrono::milliseconds(hold_ms_);
 }
 
-void ServoLock::move_and_release(bool open) {
-  const int pulse_us = open ? open_pulse_us_ : closed_pulse_us_;
+void ServoLock::emit_pwm_burst(int pulse_us, int burst_ms) {
+  pulse_us =
+      std::clamp(pulse_us, kMinPulseUs, std::min(kMaxPulseUs, period_us_ - 500));
+  const int low_us = std::max(period_us_ - pulse_us, 1000);
 
-  gpioServo(signal_gpio_, pulse_us);
-  std::this_thread::sleep_for(kSettleTime);
+  const auto stop_time =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds(burst_ms);
 
-  // Stop sending servo pulses after movement to reduce jitter.
-  gpioServo(signal_gpio_, 0);
+  while (!stop_.load() && std::chrono::steady_clock::now() < stop_time) {
+    signal_.on();
+    std::this_thread::sleep_for(std::chrono::microseconds(pulse_us));
+
+    signal_.off();
+    std::this_thread::sleep_for(std::chrono::microseconds(low_us));
+  }
+
+  // Stop pulses after movement to reduce jitter.
+  signal_.off();
 }
 
 void ServoLock::worker_loop() {
@@ -137,7 +120,7 @@ void ServoLock::worker_loop() {
       first_apply = false;
 
       lock.unlock();
-      move_and_release(desired_open);
+      emit_pwm_burst(desired_open ? open_pulse_us_ : closed_pulse_us_, 450);
       lock.lock();
       continue;
     }
@@ -170,5 +153,5 @@ void ServoLock::worker_loop() {
     }
   }
 
-  gpioServo(signal_gpio_, 0);
+  signal_.off();
 }
