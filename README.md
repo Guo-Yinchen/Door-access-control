@@ -114,7 +114,7 @@ Project updates and demo clips will be shared here:
 - Guo Yinchen: core implementation, integration, hardware setup, documentation
 - Zhuoxian Cai: to be updated
 - Yin Bole: documentation support, unit test 
-- Wenqiang Ding: to be updated
+- Wenqiang Ding: initial logging prototype (not integrated into final system)
 - Po Hsiang Chiu: to be updated
 
 ## License
