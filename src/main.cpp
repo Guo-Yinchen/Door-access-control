@@ -107,8 +107,8 @@ int main() {
 #if ENABLE_GPIO
     StatusLeds leds(chip, RED_GPIO, YELLOW_GPIO, GREEN_GPIO, "door_control");
     Buzzer buzzer(chip, BUZZER_GPIO, "door_buzzer");
-    ServoLock lock(chip, SERVO_GPIO, "door_servo", 500, 1500, 20000, 3000);
-    ServoLock lock2(chip, SERVO2_GPIO, "door_servo2", 500, 1500, 20000, 3000);
+    ServoLock lock(chip, 12, "door_servo", 1500, 2300, 20000, 3000);
+    ServoLock lock2(chip, 13, "door_servo2", 1500, 700, 20000, 3000);
     MagstripeReader reader;
 #endif
 
