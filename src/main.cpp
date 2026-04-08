@@ -4,6 +4,7 @@
 #include "RIsk/risk-policy.hpp"
 #include "Camera/camera-stream.hpp"
 #include "FACE/face-verifier.hpp"
+#include "Telemetry/auth-trace.hpp"
 
 #if ENABLE_GPIO
 #include "LED/led-v1.hpp"
@@ -15,7 +16,9 @@
 #include <atomic>
 #include <condition_variable>
 #include <csignal>
+#include <cstdint>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -24,29 +27,34 @@
 
 namespace {
 std::atomic<bool> g_stop_requested{false};
-
+// 处理 SIGINT 信号，优雅退出
 void handle_sigint(int) {
   g_stop_requested.store(true);
 }
 
+struct FaceRequest {
+  std::string card_id;
+  std::shared_ptr<AuthTrace> trace;
+};
+// 管理人脸识别任务的提交和执行，确保同一时间只有一个人脸识别任务在进行
 class FaceTaskSlot {
 public:
-  bool submit_if_idle(std::string card_id) {
+  bool submit_if_idle(FaceRequest req) {
     {
       std::lock_guard<std::mutex> lock(mtx_);
       if (stop_ || pending_ || verifying_) {
         return false;
       }
 
-      pending_card_id_ = std::move(card_id);
+      pending_req_ = std::move(req);
       pending_ = true;
     }
 
     cv_.notify_one();
     return true;
   }
-
-  bool wait_and_take(std::string& card_id, const std::atomic<bool>& stop_requested) {
+// 等待并获取一个人脸识别任务，如果 stop_requested 被设置则返回 false
+  bool wait_and_take(FaceRequest& req, const std::atomic<bool>& stop_requested) {
     std::unique_lock<std::mutex> lock(mtx_);
 
     cv_.wait(lock, [&] {
@@ -57,8 +65,8 @@ public:
       return false;
     }
 
-    card_id = std::move(pending_card_id_);
-    pending_card_id_.clear();
+    req = std::move(pending_req_);
+    pending_req_ = FaceRequest{};
     pending_ = false;
     verifying_ = true;
     return true;
@@ -80,20 +88,22 @@ public:
 private:
   std::mutex mtx_;
   std::condition_variable cv_;
-  std::string pending_card_id_;
+  FaceRequest pending_req_;
   bool pending_{false};
   bool verifying_{false};
   bool stop_{false};
 };
 } // namespace
 
+
 int main() {
   try {
     std::signal(SIGINT, handle_sigint);
+    std::atomic<uint64_t> next_trace_id{1};
 
 #if ENABLE_GPIO
     const char* chip = "gpiochip0";
-
+// GPIO 引脚定义，基于 Raspberry Pi的 BCM 编号
     const int RED_GPIO = 17;
     const int YELLOW_GPIO = 27;
     const int GREEN_GPIO = 22;
@@ -114,7 +124,7 @@ int main() {
 
     CardVerifier verifier("mag-cards_allowlist.txt");
     RiskPolicy risk_policy;
-
+// 初始化 CSI 摄像头流和人脸识别组件
     CameraStream camera_stream(CameraStream::Config{
         640,
         480,
@@ -143,10 +153,22 @@ int main() {
     });
 
     std::thread face_thread([&]() {
-      std::string card_id;
+      FaceRequest req;
 
-      while (face_slot.wait_and_take(card_id, g_stop_requested)) {
-        const bool face_ok = face_verifier.verify(card_id, g_stop_requested);
+      while (face_slot.wait_and_take(req, g_stop_requested)) {
+        const auto face_start = AuthTrace::clock::now();
+        if (req.trace) {
+          req.trace->t_face_task_taken = face_start;
+        }
+// 执行人脸识别
+        const bool face_ok = face_verifier.verify(req.card_id, g_stop_requested);
+
+        const auto now = AuthTrace::clock::now();
+        if (req.trace) {
+          req.trace->t_face_result = now;
+          req.trace->t_final_feedback = now;
+          req.trace->log_face_final(face_ok);
+        }
 
         face_slot.finish_current();
 
@@ -177,31 +199,49 @@ int main() {
           return;
         }
 
+        auto trace = std::make_shared<AuthTrace>();
+        trace->trace_id = next_trace_id.fetch_add(1);
+        trace->t_card_read = AuthTrace::clock::now();
+
         std::string card_id;
         const bool card_ok = verifier.verify(raw, card_id);
+
+        trace->t_card_verified = AuthTrace::clock::now();
+        trace->card_id = card_id;
+        trace->card_valid = card_ok;
 
         std::cout << "[RAW]  " << raw << "\n";
         std::cout << (card_ok ? "[OK]   " : "[FAIL] ") << card_id << "\n";
 
         if (!card_ok) {
+          trace->t_final_feedback = AuthTrace::clock::now();
+          trace->log_invalid_denied();
+
           bus.publish(AuthResult::denied,
                       Target::LED | Target::LOCK | Target::BUZZER);
           return;
         }
 
         if (risk_policy.require_face_now()) {
-          const bool submitted = face_slot.submit_if_idle(card_id);
+          trace->high_risk = true;
+          trace->t_pending_face = AuthTrace::clock::now();
 
+          const bool submitted = face_slot.submit_if_idle(FaceRequest{card_id, trace});
           if (!submitted) {
             std::cout << "[FACE] Face verification busy. New card ignored.\n";
             return;
           }
+
+          trace->log_pending_face();
 
           std::cout << "[RISK] High-risk condition detected. Face verification required.\n";
           bus.publish(AuthResult::pending_face,
                       Target::LED | Target::LOCK | Target::BUZZER);
           return;
         }
+
+        trace->t_final_feedback = AuthTrace::clock::now();
+        trace->log_valid_granted();
 
         bus.publish(AuthResult::granted,
                     Target::LED | Target::LOCK | Target::BUZZER);

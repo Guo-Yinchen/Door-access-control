@@ -33,14 +33,8 @@ if(ENABLE_GPIO)
     src/SERVO/servo-lock.cpp
   )
 
-  target_include_directories(door_access_control PRIVATE
-    ${GPIOD_INCLUDE_DIR}
-  )
-
-  target_link_libraries(door_access_control PRIVATE
-    ${GPIOD_LIB}
-  )
-
+  target_include_directories(door_access_control PRIVATE ${GPIOD_INCLUDE_DIR})
+  target_link_libraries(door_access_control PRIVATE ${GPIOD_LIB})
   target_compile_definitions(door_access_control PRIVATE ENABLE_GPIO=1)
 else()
   target_compile_definitions(door_access_control PRIVATE ENABLE_GPIO=0)
@@ -51,6 +45,4 @@ target_include_directories(door_access_control PRIVATE
   ${OpenCV_INCLUDE_DIRS}
 )
 
-target_link_libraries(door_access_control PRIVATE
-  ${OpenCV_LIBS}
-)
+target_link_libraries(door_access_control PRIVATE ${OpenCV_LIBS})
