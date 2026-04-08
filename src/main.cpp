@@ -117,8 +117,8 @@ int main() {
 #if ENABLE_GPIO
     StatusLeds leds(chip, RED_GPIO, YELLOW_GPIO, GREEN_GPIO, "door_control");
     Buzzer buzzer(chip, BUZZER_GPIO, "door_buzzer");
-    ServoLock lock(chip, SERVO_GPIO, "door_servo", 500, 1500, 20000, 3000);
-    ServoLock lock2(chip, SERVO2_GPIO, "door_servo2", 500, 1500, 20000, 3000);
+    ServoLock lock(chip, 12, "door_servo", 1500, 2300, 20000, 3000);
+    ServoLock lock2(chip, 13, "door_servo2", 1500, 700, 20000, 3000);
     MagstripeReader reader;
 #endif
 
@@ -126,11 +126,11 @@ int main() {
     RiskPolicy risk_policy;
 // 初始化 CSI 摄像头流和人脸识别组件
     CameraStream camera_stream(CameraStream::Config{
-        640,// width
-        480,// height
-        10, // fps
-        200, // read_timeout_ms
-        0// camera_index
+        640,
+        480,
+        10,
+        200,
+        0
     });
 
     if (!camera_stream.start()) {
@@ -252,6 +252,7 @@ int main() {
     while (!g_stop_requested.load()) {
       ::pause();
     }
+
 #if ENABLE_GPIO
     reader.stop();
 #endif
