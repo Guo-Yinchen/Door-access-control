@@ -21,7 +21,8 @@ constexpr int kMaxFramesToCheck = 60;
 constexpr double kConfidenceThreshold = 90.0;
 //constexpr int kDebugDumpFrames = 6;
 }
-
+// FaceVerifier 使用 OpenCV 的 LBPH 算法进行人脸识别，加载预训练模型和标签映射
+// FaceVerifier uses OpenCV's LBPH algorithm for face recognition, loading a pre-trained model
 FaceVerifier::FaceVerifier(CameraStream& camera,
                            const std::string& cascade_path,
                            const std::string& model_path,
@@ -49,13 +50,16 @@ FaceVerifier::FaceVerifier(CameraStream& camera,
 
   // 不让模型内部 threshold 提前把结果打成 unknown(-1)
   // 统一交给confidence逻辑判断
+  // Don't let the model's internal threshold mark results as unknown (-1) prematurely
+  // Let the confidence logic handle it uniformly
     recognizer_->setThreshold(DBL_MAX);
   } catch (const cv::Exception& e) {
     std::cerr << "[FACE] Failed to load LBPH model: " << model_path
               << " | " << e.what() << "\n";
     ok = false;
   }
-
+// 加载标签映射文件，将模型的整数标签映射到实际的卡 ID
+// Load the label mapping file, mapping the model's integer labels to actual card IDs
   if (!load_labels(labels_path)) {
     std::cerr << "[FACE] Failed to load labels: " << labels_path << "\n";
     ok = false;
@@ -132,6 +136,7 @@ std::vector<cv::Rect> FaceVerifier::detect_faces(const cv::Mat& frame_gray) {
   return faces;
 }
 // 取出人脸区域，调整为训练时的大小，使用直方图均衡化增强对比度
+// Extract the face region, resize it to the size used during training, and enhance contrast using histogram equalization
 cv::Mat FaceVerifier::preprocess_face(const cv::Mat& gray, const cv::Rect& face_rect) const {
   const int pad_x = face_rect.width / 8;
   const int pad_y = face_rect.height / 8;

@@ -12,7 +12,8 @@ static std::string chip_path_from_name(const char* chip_name) {
   if (s.rfind("/dev/", 0) == 0) return s;
   return std::string("/dev/") + s;
 }
-
+// request_output_line 请求一个 GPIO 输出线，并设置初始值和活动电平
+// request_output_line requests a GPIO output line and sets the initial value and active level
 static gpiod_line_request* request_output_line(const char* chip_name,
                                                unsigned int offset,
                                                const char* consumer,
@@ -28,7 +29,8 @@ static gpiod_line_request* request_output_line(const char* chip_name,
     gpiod_chip_close(chip);
     return nullptr;
   }
-
+// 设置线为输出，并根据 active_low 参数设置活动电平
+// Set the line as output and configure the active level based on the active_low parameter
   gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_OUTPUT);
   gpiod_line_settings_set_active_low(settings, active_low);
 
@@ -70,7 +72,8 @@ static gpiod_line_request* request_output_line(const char* chip_name,
 
   return request;
 }
-
+// GpioLine 类封装了一个 GPIO 输出线的请求和控制，提供设置高低电平的方法
+// The GpioLine class encapsulates the request and control of a GPIO output line, providing methods to set high and low levels
 GpioLine::GpioLine(const char* chip_name,
                    int line_offset,
                    const char* consumer,
@@ -97,7 +100,8 @@ GpioLine::~GpioLine() {
     req_ = nullptr;
   }
 }
-
+// set 设置 GPIO 线的值为高或低
+// set sets the value of the GPIO line to high or low
 void GpioLine::set(bool high) {
   if (!req_) return;
 

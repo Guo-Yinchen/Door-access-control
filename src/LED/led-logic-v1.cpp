@@ -8,7 +8,8 @@ StatusLeds::StatusLeds(const char* chip_name,
     green_(chip_name, green_gpio, consumer) {
   start_timer_worker();
 }
-
+// 析构函数设置停止标志并等待工作线程结束，确保系统能够干净地关闭
+// The destructor sets the stop flag and waits for the worker thread to finish, ensuring a clean shutdown of the system.
 StatusLeds::~StatusLeds() {
   {
     std::lock_guard<std::mutex> lock(mtx_);
@@ -66,7 +67,7 @@ void StatusLeds::start_timer_worker() {
 
       if (stop_worker_) break;
       if (interrupted) {
-        continue; // 被取消或重新安排了
+        continue; // 被取消或重新安排了 // Canceled or rescheduled
       }
 
       pending_idle_ = false;
@@ -93,7 +94,8 @@ void StatusLeds::cancel_pending_idle() {
   }
   cv_.notify_all();
 }
-
+// attach 接入 EventBus，根据事件自动切换状态
+// attach connects to the EventBus and automatically switches states based on events
 void StatusLeds::attach(EventBus& bus, int hold_ms) {
   hold_ = std::chrono::milliseconds(hold_ms);
 

@@ -33,7 +33,8 @@ private:
   void worker_loop();
   void schedule_relock_locked();
   void emit_pwm_burst(int pulse_us, int burst_ms = 400);
-
+// unlock 设置目标状态为打开，并安排自动重新上锁
+// unlock sets the target state to open and schedules automatic relocking
 private:
   GpioLine signal_;
 

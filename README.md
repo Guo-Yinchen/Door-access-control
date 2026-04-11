@@ -112,11 +112,10 @@ Project updates and demo clips will be shared here:
 ## Team Contributions
 
 - Guo Yinchen: core implementation, integration, hardware setup, documentation
-- Zhuoxian Cai: to be updated
+- Zhuoxian Cai: Servo motor control, jitter reduction, testing
 - Yin Bole: documentation support, unit test 
-- Wenqiang Ding: initial logging prototype (not integrated into final system)
-- Po Hsiang Chiu: to be updated
-
+- Wenqiang Ding: initial logging prototype (not integrated into final system), bug fix
+- Po Hsiang Chiu: bug fix
 ## License
 
 This project is released under the MIT License.  

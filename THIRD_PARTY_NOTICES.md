@@ -1,20 +1,18 @@
 # Third-Party Notices
 
-This project uses the following third-party open-source component(s).
-See each project for full license texts and details.
+This project uses third-party libraries, tools, and platform components for computer vision, GPIO access, camera handling, Linux device interaction, and build configuration.
 
-## libgpiod (Linux GPIO character device library)
-- Project: libgpiod
-- Upstream: https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git
-- Package (build system): libgpiod-dev 2.2.1-2+deb13u1 (arm64)
-- License:
-  - Core library: LGPL-2.1+ (Files: *)  
-  - Tools: GPL-2+ (Files: tools/*)  
-  (Verified from: /usr/share/doc/libgpiod-dev/copyright)
-  
-- How used:
-  - Linked as `-lgpiod` 
-  - Used via libgpiod v2 C API to request GPIO output lines and set values
-- Where used:
-  - include/GPIO/gpio-line.hpp 
-  - src/GPIO/gpio-line.cpp 
+Examples include:
+
+- OpenCV
+- libgpiod
+- Raspberry Pi camera / libcamera-related tools
+- Linux device interfaces
+- CMake and standard Linux build tools
+
+These components are not authored by this project team and remain the property of their respective owners.
+
+All third-party software is subject to its own license terms.  
+Users should refer to the original upstream projects for full copyright, license, and redistribution information.
+
+This repository only claims authorship of the project-specific code written for this system, including the authentication flow, event-driven coordination logic, hardware integration logic, and related project code built on top of those external dependencies.

@@ -78,7 +78,8 @@ bool CameraStream::get_latest_frame(cv::Mat& out) const {
   out = latest_frame_.clone();
   return true;
 }
-
+// wait_for_frame 等待新的一帧到来或接收到停止信号，如果成功获取到新帧则返回 true，否则返回 false
+// wait_for_frame waits for a new frame to arrive or a stop signal. It returns true if a new frame is successfully obtained, or false otherwise.
 bool CameraStream::wait_for_frame(cv::Mat& out,
                                   const std::atomic<bool>& external_stop,
                                   int timeout_ms) {
@@ -112,7 +113,8 @@ bool CameraStream::open_pipe() {
   if (pipe_) {
     return true;
   }
-
+// 构造 rpicam-vid 命令行，使用 MJPEG 编码并输出到 stdout，同时丢弃 stderr 输出
+// Construct the rpicam-vid command line, using MJPEG encoding and outputting to stdout, while discarding stderr output
   std::ostringstream cmd;
   cmd << "rpicam-vid"
       << " --camera " << cfg_.camera_index
@@ -146,7 +148,7 @@ bool CameraStream::open_pipe() {
   stream_buffer_.clear();
   return true;
 }
-
+// close_pipe 关闭管道并清理相关资源
 void CameraStream::close_pipe() {
   if (pipe_) {
     ::pclose(pipe_);
@@ -172,7 +174,7 @@ void CameraStream::capture_loop() {
 
     cv::Mat encoded(1, static_cast<int>(jpeg_bytes.size()), CV_8UC1, jpeg_bytes.data());
     cv::Mat frame = cv::imdecode(encoded, cv::IMREAD_COLOR);
-
+// 如果解码失败，继续读取下一帧 If decoding fails, continue to read the next frame
     if (frame.empty()) {
       continue;
     }
@@ -202,8 +204,8 @@ bool CameraStream::read_next_jpeg(std::vector<unsigned char>& jpeg_bytes) {
   while (!stop_requested_.load()) {
     std::size_t soi = find_marker(stream_buffer_, 0, 0xFF, 0xD8);
     if (soi != std::string::npos && soi > 0) {
-      stream_buffer_.erase(stream_buffer_.begin(),
-                           stream_buffer_.begin() + static_cast<std::ptrdiff_t>(soi));
+      stream_buffer_.erase(stream_buffer_.begin(),// 丢弃 SOI 之前的无效数据 Discard invalid data before SOI
+                           stream_buffer_.begin() + static_cast<std::ptrdiff_t>(soi));// 更新 SOI 位置 Update SOI position
       soi = 0;
     } else if (soi == std::string::npos && stream_buffer_.size() > 1) {
       unsigned char last = stream_buffer_.back();
@@ -220,9 +222,9 @@ bool CameraStream::read_next_jpeg(std::vector<unsigned char>& jpeg_bytes) {
         if (eoi != std::string::npos) {
           const std::size_t end_pos = eoi + 2;
           jpeg_bytes.assign(stream_buffer_.begin(),
-                            stream_buffer_.begin() + static_cast<std::ptrdiff_t>(end_pos));
+                            stream_buffer_.begin() + static_cast<std::ptrdiff_t>(end_pos));// 包含 SOI 和 EOI 的完整 JPEG 数据// Complete JPEG data including SOI and EOI
           stream_buffer_.erase(stream_buffer_.begin(),
-                               stream_buffer_.begin() + static_cast<std::ptrdiff_t>(end_pos));
+                               stream_buffer_.begin() + static_cast<std::ptrdiff_t>(end_pos));// Remove the processed JPEG data from the buffer
           return true;
         }
       }

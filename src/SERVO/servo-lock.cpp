@@ -23,7 +23,8 @@ ServoLock::ServoLock(const char* chip_name,
       hold_ms_(std::max(unlock_hold_ms, 0)) {
   worker_ = std::thread([this]() { worker_loop(); });
 }
-
+// 析构函数设置停止标志并等待工作线程结束，确保系统能够干净地关闭
+// The destructor sets the stop flag and waits for the worker thread to finish, ensuring a clean
 ServoLock::~ServoLock() {
   stop_.store(true);
   cv_.notify_all();
@@ -34,7 +35,8 @@ ServoLock::~ServoLock() {
 
   signal_.off();
 }
-
+// attach 订阅事件总线上的锁事件，根据事件结果调用 lock() 或 unlock()
+// attach subscribes to lock events on the event bus and calls lock() or unlock() based
 void ServoLock::attach(EventBus& bus) {
   bus.subscribe(Target::LOCK, [this](const AuthEvent& e) {
     switch (e.result) {
@@ -51,7 +53,8 @@ void ServoLock::attach(EventBus& bus) {
     }
   });
 }
-
+// lock 设置目标状态为关闭，并取消任何待定的重新上锁
+// lock sets the target state to closed and cancels any pending relock
 void ServoLock::lock() {
   {
     std::lock_guard<std::mutex> lock(mtx_);
@@ -60,7 +63,8 @@ void ServoLock::lock() {
   }
   cv_.notify_one();
 }
-
+// unlock 设置目标状态为打开，并安排自动重新上锁
+// unlock sets the target state to open and schedules automatic relocking
 void ServoLock::unlock() {
   {
     std::lock_guard<std::mutex> lock(mtx_);
@@ -69,7 +73,8 @@ void ServoLock::unlock() {
   }
   cv_.notify_one();
 }
-
+// set_hold_ms 更新自动重新上锁的时间，并在必要时重新安排上锁
+// set_hold_ms updates the time for automatic relocking and reschedules if necessary
 void ServoLock::set_hold_ms(int hold_ms) {
   {
     std::lock_guard<std::mutex> lock(mtx_);
@@ -86,7 +91,8 @@ void ServoLock::schedule_relock_locked() {
   relock_deadline_ =
       std::chrono::steady_clock::now() + std::chrono::milliseconds(hold_ms_);
 }
-
+// emit_pwm_burst 以指定的脉冲宽度和持续时间发出 PWM 脉冲，控制舵机移动
+// emit_pwm_burst emits PWM pulses with specified pulse width and duration to control the servo movement
 void ServoLock::emit_pwm_burst(int pulse_us, int burst_ms) {
   pulse_us =
       std::clamp(pulse_us, kMinPulseUs, std::min(kMaxPulseUs, period_us_ - 500));
@@ -104,6 +110,7 @@ void ServoLock::emit_pwm_burst(int pulse_us, int burst_ms) {
   }
 
   // Stop pulses after movement to reduce jitter.
+  // 运动结束后停止脉冲以减少抖动。
   signal_.off();
 }
 
@@ -124,7 +131,8 @@ void ServoLock::worker_loop() {
       lock.lock();
       continue;
     }
-
+// 如果正在等待重新上锁的时间到了，或者在等待过程中状态发生了变化，则立即上锁
+// If it's waiting for the relock time and it has arrived, or if the state changes during the wait, it will lock immediately.
     if (relock_pending_) {
       const auto deadline = relock_deadline_;
 
