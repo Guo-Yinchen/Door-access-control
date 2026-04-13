@@ -5,7 +5,7 @@
 #include "Camera/camera-stream.hpp"
 #include "FACE/face-verifier.hpp"
 #include "Telemetry/auth-trace.hpp"
-
+#include <chrono>
 #if ENABLE_GPIO
 #include "LED/led-v1.hpp"
 #include "Magnetic-reader/Magnetic-reader.hpp"
