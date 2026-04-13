@@ -2,10 +2,17 @@
 
 A Raspberry Pi based realtime door access control prototype with magstripe authentication, risk-aware face verification, servo lock control, and event-driven C++ modules.
 
-![Project Icon](docs/images/DAC.png)
 
-
-
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="docs/images/DAC.png" alt="Project Icon" width="260">
+    </td>
+    <td align="center">
+      <img src="docs/images/demo.jpg" alt="Demo Icon" width="160">
+    </td>
+  </tr>
+</table>
 ## Overview
 
 This project is a realtime door access control system developed on Raspberry Pi for ENG5220.  
@@ -184,14 +191,10 @@ In practice, this gives the system two behaviours:
 This fits the design goal of the project: keep normal door access responsive, while adding a more expensive verification step only when the situation is considered risky.
 
 ### Example traces
-
-```text
-[LATENCY] path=valid_card_granted total_us=83
-[LATENCY] path=invalid_card_denied total_us=24
-[LATENCY] path=high_risk_pending_face total_to_pending_us=31
-[LATENCY] path=face_final_granted total_us=2942798
-[LATENCY] path=face_final_denied total_us=6047180
-```
+#### valid_card_granted total
+![test Photo](docs/images/lag.png)
+#### invalid_card_denied total
+![test Photo](docs/images/lag2.png)
 
 ## Runtime Controls
 
@@ -212,7 +215,7 @@ Project updates and demo clips will be shared here:
 - Zhuoxian Cai: Servo motor control, jitter reduction, testing
 - Yin Bole: documentation support, unit test 
 - Wenqiang Ding: initial logging prototype (not integrated into final system), bug fix
-- Po Hsiang Chiu: bug fix
+- Po Hsiang Chiu: bug fix, Video editing
 ## License
 
 This project is released under the MIT License.  
