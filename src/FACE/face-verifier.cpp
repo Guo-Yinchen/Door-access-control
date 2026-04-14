@@ -15,13 +15,15 @@ constexpr int kFaceWidth = 160;
 constexpr int kFaceHeight = 160;
 
 constexpr int kVerificationWindowMs = 6000;
-constexpr int kFrameWaitTimeoutMs = 250;
+constexpr int kFrameWaitTimeoutMs = 50;
 constexpr int kRequiredMatches = 3;
 constexpr int kMaxFramesToCheck = 60;
 constexpr double kConfidenceThreshold = 90.0;
 //constexpr int kDebugDumpFrames = 6;
 }
 
+// FaceVerifier 使用 OpenCV 的 LBPH 算法进行人脸识别，加载预训练模型和标签映射
+// FaceVerifier uses OpenCV's LBPH algorithm for face recognition, loading a pre-trained model
 FaceVerifier::FaceVerifier(CameraStream& camera,
                            const std::string& cascade_path,
                            const std::string& model_path,
@@ -47,8 +49,10 @@ FaceVerifier::FaceVerifier(CameraStream& camera,
   try {
     recognizer_->read(model_path);
 
-  // 不让模型内部 threshold 提前把结果打成 unknown(-1)
-  // 统一交给confidence逻辑判断
+    // 不让模型内部 threshold 提前把结果打成 unknown(-1)
+    // 统一交给confidence逻辑判断
+    // Don't let the model's internal threshold mark results as unknown (-1) prematurely
+    // Let the confidence logic handle it uniformly
     recognizer_->setThreshold(DBL_MAX);
   } catch (const cv::Exception& e) {
     std::cerr << "[FACE] Failed to load LBPH model: " << model_path
@@ -56,6 +60,8 @@ FaceVerifier::FaceVerifier(CameraStream& camera,
     ok = false;
   }
 
+  // 加载标签映射文件，将模型的整数标签映射到实际的卡 ID
+  // Load the label mapping file, mapping the model's integer labels to actual card IDs
   if (!load_labels(labels_path)) {
     std::cerr << "[FACE] Failed to load labels: " << labels_path << "\n";
     ok = false;
@@ -131,7 +137,9 @@ std::vector<cv::Rect> FaceVerifier::detect_faces(const cv::Mat& frame_gray) {
       cv::Size());
   return faces;
 }
+
 // 取出人脸区域，调整为训练时的大小，使用直方图均衡化增强对比度
+// Extract the face region, resize it to the size used during training, and enhance contrast using histogram equalization
 cv::Mat FaceVerifier::preprocess_face(const cv::Mat& gray, const cv::Rect& face_rect) const {
   const int pad_x = face_rect.width / 8;
   const int pad_y = face_rect.height / 8;
@@ -150,8 +158,8 @@ cv::Mat FaceVerifier::preprocess_face(const cv::Mat& gray, const cv::Rect& face_
   return roi;
 }
 
-//统计在验证窗口符合要求的帧数，如果达到要求的匹配数则验证成功，否则失败
-//verify the number of frames that meet the requirements in the verification window, if the required number of matches is reached, the verification is successful, otherwise it fails
+// 统计在验证窗口符合要求的帧数，如果达到要求的匹配数则验证成功，否则失败
+// verify the number of frames that meet the requirements in the verification window
 bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& stop_requested) {
   if (!ready_) {
     std::cerr << "[FACE] Verifier not ready.\n";
@@ -182,6 +190,9 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
 
     cv::Mat frame;
     const bool got_frame = camera_.wait_for_frame(frame, stop_requested, kFrameWaitTimeoutMs);
+    if (stop_requested.load()) {
+      break;
+    }
     if (!got_frame || frame.empty()) {
       continue;
     }
@@ -199,8 +210,12 @@ bool FaceVerifier::verify(const std::string& card_id, const std::atomic<bool>& s
     bool matched_this_frame = false;
 
     for (const auto& face_rect : faces) {
+      if (stop_requested.load()) {
+        break;
+      }
+
       cv::Mat face_img = preprocess_face(gray, face_rect);
-/*测试用 
+/*测试用
 测试时用于确认预处理是否合理，LBPH模型是否能正确预测
 For testing,if the LBPH model can predict correctly
       if (dumped_frames < kDebugDumpFrames) {
@@ -213,8 +228,9 @@ For testing,if the LBPH model can predict correctly
 */
       int predicted_label = -1;
       double confidence = DBL_MAX;
-//预测人脸标签和置信度，预测失败会抛出异常
-//Predict the face label and confidence, an exception will be thrown if the prediction fails
+
+      // 预测人脸标签和置信度，预测失败会抛出异常
+      // Predict the face label and confidence, an exception will be thrown if the prediction fails
       try {
         recognizer_->predict(face_img, predicted_label, confidence);
       } catch (const cv::Exception& e) {
@@ -249,6 +265,10 @@ For testing,if the LBPH model can predict correctly
       }
     }
 
+    if (stop_requested.load()) {
+      break;
+    }
+
     if (matched_this_frame) {
       ++matched_frames;
       std::cout << "[FACE] Match accepted (" << matched_frames
@@ -259,6 +279,10 @@ For testing,if the LBPH model can predict correctly
         std::cout << "[FACE] Face verification PASSED.\n";
         return true;
       }
+    }
+
+    if (valid_prediction_frames >= kMaxFramesToCheck) {
+      break;
     }
   }
 

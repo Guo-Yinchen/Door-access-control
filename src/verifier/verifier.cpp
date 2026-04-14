@@ -25,11 +25,13 @@ std::string CardVerifier::extract_card_id(const std::string& raw_in) {
   if (raw.empty()) return "";
 
   // 纯数字直接用
+  // If it's purely digits, use it directly
   bool all_digits = std::all_of(raw.begin(), raw.end(),
                                 [](unsigned char c){ return std::isdigit(c); });
   if (all_digits) return raw;
 
   // Track2 常见：;1234...=...
+  // Common for Track2: ;1234...=...
   auto semi = raw.find(';');
   auto eq   = raw.find('=');
   if (semi != std::string::npos && eq != std::string::npos && eq > semi + 1) {
@@ -40,6 +42,7 @@ std::string CardVerifier::extract_card_id(const std::string& raw_in) {
   }
 
   // fallback：抽取所有数字
+  // fallback: extract all digits
   std::string digits;
   for (unsigned char c : raw) if (std::isdigit(c)) digits.push_back(char(c));
   return digits;

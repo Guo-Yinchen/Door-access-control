@@ -11,7 +11,7 @@
 #include <vector>
 
 class CameraStream {
-public:
+public:// Config 定义了摄像头流的配置参数，包括分辨率、帧率、读取超时和摄像头索引等 Config defines the configuration parameters for the camera stream, including resolution, frame rate, read timeout, and camera index
   struct Config {
     int width{640};
     int height{480};
@@ -26,7 +26,7 @@ public:
 
   CameraStream(const CameraStream&) = delete;
   CameraStream& operator=(const CameraStream&) = delete;
-
+// start 启动摄像头流，返回是否成功 start the camera stream, returning whether it was successful
   bool start();
   void stop();
 

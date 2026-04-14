@@ -43,16 +43,17 @@ MagstripeReader::~MagstripeReader() {
     ::close(fd_);
     fd_ = -1;
   }
-  if (stop_pipe_[0] >= 0) {
+  if (stop_pipe_[0] >= 0) {// Close the stop pipe to clean up resources
     ::close(stop_pipe_[0]);
     stop_pipe_[0] = -1;
   }
-  if (stop_pipe_[1] >= 0) {
+  if (stop_pipe_[1] >= 0) {//
     ::close(stop_pipe_[1]);
     stop_pipe_[1] = -1;
   }
 }
-
+// stop 设置停止标志并通过管道通知读取循环退出
+// stop sets the stop flag and notifies the reading loop to exit via the pipe
 void MagstripeReader::stop() {
   const bool already = stop_.exchange(true);
   if (already) return;
@@ -62,7 +63,8 @@ void MagstripeReader::stop() {
     (void)::write(stop_pipe_[1], &byte, 1);
   }
 }
-
+// keycode_to_char 将输入事件的键码转换为对应的字符，考虑 Shift 键的状态
+// keycode_to_char converts the keycode of an input event to the corresponding character, considering
 char MagstripeReader::keycode_to_char(int code, bool shift) {
   if (code >= KEY_1 && code <= KEY_9) return char('1' + (code - KEY_1));
   if (code == KEY_0) return '0';
@@ -87,7 +89,8 @@ char MagstripeReader::keycode_to_char(int code, bool shift) {
 
   return 0;
 }
-
+// run 进入读取循环，调用回调函数处理每条读到的数据，直到接收到停止信号
+// run enters the reading loop, calling the callback function to process each read data until a stop
 void MagstripeReader::run(CardCallback cb) {
   if (!cb) {
     throw std::invalid_argument("MagstripeReader::run: callback is empty");
@@ -125,7 +128,8 @@ void MagstripeReader::run(CardCallback cb) {
     if (!(fds[0].revents & POLLIN)) {
       continue;
     }
-
+// 读取输入事件并处理，直到读到回车键表示一条数据结束，或者读到停止信号
+// Read input events and process them until an Enter key is read indicating the end of a data entry, or a stop signal is received
     input_event ev{};
     const ssize_t n = ::read(fd_, &ev, sizeof(ev));
 

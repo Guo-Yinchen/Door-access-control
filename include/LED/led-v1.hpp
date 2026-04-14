@@ -17,11 +17,11 @@ public:
   StatusLeds(const StatusLeds&) = delete;
   StatusLeds& operator=(const StatusLeds&) = delete;
 
-  void idle();     // 黄灯常亮，红绿灭
-  void granted();  // 绿灯亮（黄保持亮），红灭
-  void denied();   // 红灯亮（黄保持亮），绿灭
-  void all_off();  // 全灭（可选）
-  void pending_face();  // 红灯+黄灯常亮，绿灭
+  void idle();     // 黄灯常亮，红绿灭// Yellow on, red and green off
+  void granted();  // 绿灯亮（黄保持亮），红灭// Green on (yellow stays on), red off
+  void denied();   // 红灯亮（黄保持亮），绿灭// Red on (yellow stays on), green off
+  void all_off();  // 全灭（可选）// All off (optional)
+  void pending_face();  // 红灯+绿灯+黄灯全亮// Red + Green + Yellow all on
 
   // 接入 EventBus，根据事件自动切换状态
   // hold_ms：显示 granted/denied 后保持多久，再自动回 idle

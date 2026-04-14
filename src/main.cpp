@@ -5,7 +5,7 @@
 #include "Camera/camera-stream.hpp"
 #include "FACE/face-verifier.hpp"
 #include "Telemetry/auth-trace.hpp"
-
+#include <chrono>
 #if ENABLE_GPIO
 #include "LED/led-v1.hpp"
 #include "Magnetic-reader/Magnetic-reader.hpp"
@@ -17,6 +17,7 @@
 #include <condition_variable>
 #include <csignal>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -27,16 +28,25 @@
 
 namespace {
 std::atomic<bool> g_stop_requested{false};
-// 处理 SIGINT 信号，优雅退出
+std::atomic<int> g_sigint_count{0};
+std::atomic<bool> g_demo_force_face{false};
+
 void handle_sigint(int) {
-  g_stop_requested.store(true);
+  const int count = g_sigint_count.fetch_add(1) + 1;
+  if (count == 1) {
+    g_stop_requested.store(true);
+  } else {
+    std::_Exit(130);
+  }
 }
 
 struct FaceRequest {
   std::string card_id;
   std::shared_ptr<AuthTrace> trace;
 };
-// 管理人脸识别任务的提交和执行，确保同一时间只有一个人脸识别任务在进行
+
+// FaceTaskSlot 管理一个人脸识别任务槽，保证同一时间只有一个人脸识别任务在进行
+// FaceTaskSlot manages a single face recognition task slot, ensuring that only one face recognition task is in progress at any time.
 class FaceTaskSlot {
 public:
   bool submit_if_idle(FaceRequest req) {
@@ -53,7 +63,9 @@ public:
     cv_.notify_one();
     return true;
   }
-// 等待并获取一个人脸识别任务，如果 stop_requested 被设置则返回 false
+
+  // wait_and_take 等待直到有任务提交或接收到停止信号，如果是前者则取出任务并返回 true，后者则返回 false
+  // wait_and_take waits until a task is submitted or a stop signal is received. It returns true if a task is taken, or false if stopping.
   bool wait_and_take(FaceRequest& req, const std::atomic<bool>& stop_requested) {
     std::unique_lock<std::mutex> lock(mtx_);
 
@@ -77,6 +89,8 @@ public:
     verifying_ = false;
   }
 
+  // shutdown 设置停止标志并通知所有等待的线程，确保系统能够干净地关闭
+  // shutdown sets the stop flag and notifies all waiting threads to ensure a clean shutdown of the system.
   void shutdown() {
     {
       std::lock_guard<std::mutex> lock(mtx_);
@@ -95,7 +109,6 @@ private:
 };
 } // namespace
 
-
 int main() {
   try {
     std::signal(SIGINT, handle_sigint);
@@ -103,7 +116,7 @@ int main() {
 
 #if ENABLE_GPIO
     const char* chip = "gpiochip0";
-// GPIO 引脚定义，基于 Raspberry Pi的 BCM 编号
+
     const int RED_GPIO = 17;
     const int YELLOW_GPIO = 27;
     const int GREEN_GPIO = 22;
@@ -124,7 +137,7 @@ int main() {
 
     CardVerifier verifier("mag-cards_allowlist.txt");
     RiskPolicy risk_policy;
-// 初始化 CSI 摄像头流和人脸识别组件
+
     CameraStream camera_stream(CameraStream::Config{
         640,
         480,
@@ -152,6 +165,28 @@ int main() {
       bus.dispatch_loop();
     });
 
+    // 让用户可以通过命令行控制是否进入强制人脸验证的演示模式
+    // This allows users to control whether to enter a demo mode that requires mandatory face verification via command line.
+    std::thread demo_cmd_thread([]() {
+      std::string cmd;
+      while (!g_stop_requested.load()) {
+        if (!std::getline(std::cin, cmd)) {
+          break;
+        }
+
+        if (cmd == "d" || cmd == "D") {
+          g_demo_force_face.store(true);
+          std::cout << "[DEMO] Force-face mode ENABLED.\n";
+        } else if (cmd == "n" || cmd == "N") {
+          g_demo_force_face.store(false);
+          std::cout << "[DEMO] Force-face mode DISABLED. Normal risk policy restored.\n";
+        }
+      }
+    });
+    demo_cmd_thread.detach();
+
+    // 人脸识别线程，等待人脸识别任务的提交，执行人脸识别，并根据结果发布事件
+    // The face recognition thread waits for face recognition tasks to be submitted, performs face recognition, and publishes events based on the results.
     std::thread face_thread([&]() {
       FaceRequest req;
 
@@ -160,7 +195,7 @@ int main() {
         if (req.trace) {
           req.trace->t_face_task_taken = face_start;
         }
-// 执行人脸识别
+
         const bool face_ok = face_verifier.verify(req.card_id, g_stop_requested);
 
         const auto now = AuthTrace::clock::now();
@@ -185,9 +220,14 @@ int main() {
       }
     });
 
+    // 主线程发布初始状态事件，并进入等待状态，直到接收到停止信号
+    // The main thread publishes the initial state event and enters a waiting state until a stop signal is received.
 #if ENABLE_GPIO
     bus.publish(AuthResult::idle, Target::LED | Target::LOCK | Target::BUZZER);
     std::cout << "Swipe card now (Ctrl+C to exit)\n";
+    std::cout << "Type 'd' + Enter to enable force-face demo mode.\n";
+    std::cout << "Type 'n' + Enter to return to normal risk policy.\n";
+    std::cout << "Press Ctrl+C once for graceful shutdown, twice to force exit.\n";
 #else
     std::cout << "GPIO disabled build running (Ctrl+C to exit)\n";
 #endif
@@ -222,7 +262,12 @@ int main() {
           return;
         }
 
-        if (risk_policy.require_face_now()) {
+        // 根据风险策略判断是否需要进行人脸验证
+        // Determine whether face verification is required based on the risk policy
+        const bool force_face_demo = g_demo_force_face.load();
+        const bool require_face = force_face_demo || risk_policy.require_face_now();
+
+        if (require_face) {
           trace->high_risk = true;
           trace->t_pending_face = AuthTrace::clock::now();
 
@@ -234,7 +279,12 @@ int main() {
 
           trace->log_pending_face();
 
-          std::cout << "[RISK] High-risk condition detected. Face verification required.\n";
+          if (force_face_demo) {
+            std::cout << "[DEMO] Force-face demo mode triggered. Face verification required.\n";
+          } else {
+            std::cout << "[RISK] High-risk condition detected. Face verification required.\n";
+          }
+
           bus.publish(AuthResult::pending_face,
                       Target::LED | Target::LOCK | Target::BUZZER);
           return;
@@ -249,6 +299,8 @@ int main() {
     });
 #endif
 
+    // 主线程进入等待状态，直到接收到停止信号
+    // The main thread enters a waiting state until a stop signal is received.
     while (!g_stop_requested.load()) {
       ::pause();
     }

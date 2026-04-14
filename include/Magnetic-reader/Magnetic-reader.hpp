@@ -6,7 +6,7 @@
 class MagstripeReader {
 public:
   struct Config {
-    std::string device = "/dev/input/by-id/usb-DECETECH.COM.CN_DK_131K-UL_V7.76-event-kbd";
+    std::string device = "/dev/input/by-id/usb-DECETECH.COM.CN_DK_131K-UL_V7.76-event-kbd";// 读卡器输入设备路径，默认为 DECETECH DK-131K input event device path by default
     bool grab_exclusive = false;
   };
 

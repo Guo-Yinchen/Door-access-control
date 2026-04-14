@@ -26,7 +26,8 @@ Buzzer::~Buzzer() {
   //保持静音状态
   buzzer_.off();
 }
-
+// attach 订阅事件总线上的蜂鸣器事件，根据事件结果调用不同的模式函数
+// attach subscribes to buzzer events on the event bus and calls different mode functions based on
 void Buzzer::attach(EventBus& bus) {
   bus.subscribe(Target::BUZZER, [this](const AuthEvent& e) {
     switch (e.result) {
