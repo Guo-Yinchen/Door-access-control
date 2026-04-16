@@ -207,7 +207,7 @@ This fits the design goal of the project: keep normal door access responsive, wh
 Project updates and demo clips will be shared here:
 
 - TikTok: https://www.tiktok.com/@d.a.control
-- YouTube: https://www.youtube.com/channel/UC-V3Io8VhV6NMzuq4lF-zSw
+- YouTube: https://www.youtube.com/@Dongxin-pp8ee/shorts
 
 ## Team Contributions
 
