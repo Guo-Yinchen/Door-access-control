@@ -394,9 +394,7 @@ Project updates and demo clips are available here:
 
 - TikTok: https://www.tiktok.com/@d.a.control
 - YouTube: https://www.youtube.com/@Dongxin-pp8ee/shorts
-
 ---
-
 ## Team Contributions
 
 - **Guo Yinchen**: core implementation, integration, hardware setup, documentation
