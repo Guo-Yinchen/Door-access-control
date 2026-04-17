@@ -2,7 +2,6 @@
 
 A Raspberry Pi based realtime door access control prototype with magstripe authentication, risk-aware face verification, servo lock control, and event-driven C++ modules.
 
-
 <table align="center">
   <tr>
     <td align="center">
@@ -13,24 +12,50 @@ A Raspberry Pi based realtime door access control prototype with magstripe authe
     </td>
   </tr>
 </table>
+
 ## Overview
 
-This project is a realtime door access control system developed on Raspberry Pi for ENG5220.  
-It combines credential input, verification logic, hardware feedback, and modular C++ components into a responsive embedded prototype.
+This project is a realtime door access control system developed on Raspberry Pi for **ENG5220 Real Time Embedded Programming**.
+
+It combines:
+
+- magnetic stripe credential input
+- card verification
+- risk-aware face verification
+- event-driven hardware feedback
+- servo-based lock actuation
+
+The goal is to keep the normal access path very fast, while only invoking the more expensive face verification stage when the situation is considered high risk.
+
+---
+
 ## Project Structure
 
-- `src/` main application source code
-- `training/` face model training tool
-- `tests/` unit tests
-- `models/` trained face model and cascade files
-- `docs/` images and project assets
+```text
+.
+├── include/         # Header files
+├── src/             # Main application source code
+├── training/        # Face model training tool
+├── tests/           # Unit tests
+├── models/          # Trained face model and cascade files
+├── docs/            # Images and project assets
+├── LICENSE
+└── README.md
+```
+
+---
+
 ## Core Features
 
 - Magstripe-based access input
+- Allowlist-based card verification
 - Risk-triggered face verification
 - Servo-based lock actuation
 - LED and buzzer feedback
 - Event-driven C++ design on Linux
+- Realtime latency tracing
+
+---
 
 ## System Workflow
 
@@ -47,7 +72,10 @@ flowchart LR
     G --> H[Servo Lock / LEDs]
     D --> I[LEDs / Buzzer]
 ```
-### System Status Indication
+
+---
+
+## System Status Indication
 
 The current implementation provides system feedback through LEDs, buzzer, and servo lock control.
 
@@ -59,6 +87,8 @@ The current implementation provides system feedback through LEDs, buzzer, and se
 | Access Granted | Valid card accepted or face verification passed | Green ON, Yellow ON, Red OFF | One short beep | Unlocked temporarily, then locked again automatically |
 
 > In the current code, **granted** and **denied** states are held for about **2 seconds** before returning to **Idle** automatically.
+
+---
 
 ## Hardware
 
@@ -73,46 +103,188 @@ The current implementation provides system feedback through LEDs, buzzer, and se
 | <img src="docs/images/CAM.jpg" width="120"> | Camera | Face verification | ¥40 |
 | <img src="docs/images/LED.jpg" width="120"> | LEDs (Red / Yellow / Green) | System status indication | ¥6 |
 | <img src="docs/images/BUZZER.jpg" width="120"> | Buzzer | Alarm feedback | £4 |
-| <img src="docs/images/SG90.jpg" width="120"> | SG90 Servo Motor | Door lock actuation | £6 |
+| <img src="docs/images/SG90.jpg" width="120"> | 2 × SG90 Servo Motors | Door lock actuation | £12 |
 
-## Prerequisites
+---
 
-- Linux on Raspberry Pi
+## Wiring / GPIO Mapping
+
+The current prototype uses the following Raspberry Pi GPIO assignments:
+
+| Module | GPIO Pin |
+|---|---:|
+| Red LED | 17 |
+| Yellow LED | 27 |
+| Green LED | 22 |
+| Buzzer | 18 |
+| Servo 1 | 12 |
+| Servo 2 | 13 |
+
+> These GPIO assignments are currently hard-coded in `src/main.cpp`.
+
+The GPIO chip used in the code is:
+
+```text
+gpiochip0
+```
+
+If your wiring is different, update the GPIO pin definitions in `src/main.cpp` before building.
+
+---
+
+## Software Requirements
+
+This project was developed for **Debian Trixie on Raspberry Pi 5**.
+
+### Required software and libraries
+
 - CMake 3.16+
-- C++17 compiler
-- OpenCV with `core`, `imgproc`, `highgui`, `videoio`, `objdetect`, and `face`
+- C++17 compiler (`g++`)
+- OpenCV with:
+  - `core`
+  - `imgproc`
+  - `highgui`
+  - `videoio`
+  - `objdetect`
+  - `face`
 - `libgpiod`
+- `rpicam-apps` (provides `rpicam-vid` for CSI camera streaming)
 
-Install the required packages:
+### Install dependencies
 
 ```bash
 sudo apt update
-sudo apt install -y cmake g++ libgpiod-dev libopencv-dev libopencv-contrib-dev
+sudo apt install -y \
+  cmake \
+  g++ \
+  libgpiod-dev \
+  libopencv-dev \
+  libopencv-contrib-dev \
+  rpicam-apps
 ```
-## Build & Run
 
-Build the project:
+---
+
+## Build
+
+Clone the repository and build the main project:
 
 ```bash
+git clone https://github.com/Guo-Yinchen/Door-access-control.git
+cd Door-access-control
 cmake -S . -B build
 cmake --build build -j
 ```
-Run the program:
+
+### Optional: build without GPIO support
+
+This is useful for **compile checking only** when GPIO hardware is not available.
+
+```bash
+cmake -S . -B build-no-gpio -DENABLE_GPIO=OFF
+cmake --build build-no-gpio -j
+```
+
+> Note: the main application still expects the CSI camera path at runtime, so this option is mainly for build verification rather than full functional use.
+
+---
+
+## Run
+
+Run the main program:
+
 ```bash
 ./build/door_access_control
 ```
+
+If your system reports permission errors when opening the magnetic stripe input device, try:
+
+```bash
+sudo ./build/door_access_control
+```
+
+### Runtime notes
+
+- The full system is intended to run on **Raspberry Pi hardware**.
+- The program expects:
+  - a CSI camera accessible via `rpicam-vid`
+  - a USB magnetic stripe reader
+  - GPIO-connected LEDs, buzzer, and servos
+- Compilation may succeed even if the hardware is absent, but the full program will not behave correctly at runtime without the required devices.
+
+---
+
+## Hardware Assumptions
+
+This repository currently assumes the following hardware setup:
+
+- **Raspberry Pi 5**
+- **CSI camera** connected and working with `rpicam-vid`
+- **USB magnetic stripe reader**
+- LEDs, buzzer, and SG90 servo motors connected to the GPIO pins listed above
+
+### Magnetic stripe reader device path
+
+The current code uses this default input device path:
+
+```text
+/dev/input/by-id/usb-DECETECH.COM.CN_DK_131K-UL_V7.76-event-kbd
+```
+
+If your reader appears under a different event device, update the default path in:
+
+```text
+include/Magnetic-reader/Magnetic-reader.hpp
+```
+
+You can inspect available input devices with:
+
+```bash
+ls -l /dev/input/by-id/
+cat /proc/bus/input/devices
+```
+
+### Camera requirement
+
+The face verification module uses:
+
+```bash
+rpicam-vid
+```
+
+You can verify that the camera stack is available with:
+
+```bash
+rpicam-vid --help
+```
+
+---
+
 ## Testing
 
 The repository includes unit tests for selected modules.
+
+### Build and run tests
 
 ```bash
 cmake -S tests -B build/tests
 cmake --build build/tests -j
 ctest --test-dir build/tests --output-on-failure
 ```
+
+### Covered modules
+
+Current unit tests cover:
+
+- `CardVerifier`
+- `EventBus`
+
 Example test output:
 
 ![test Photo](docs/images/test.png)
+
+---
+
 ## Face Model Training
 
 A dedicated training tool is included in the `training/` folder.
@@ -128,15 +300,18 @@ dataset/
 │   ├── img2.jpg
 │   └── img3.jpg
 ```
+
 Each subfolder name is treated as the user's card ID, and all images inside that folder are used as training samples for that user.
 
 ### Build the training tool
+
 ```bash
 cmake -S training -B build/training
 cmake --build build/training -j
 ```
 
 ### Run training
+
 ```bash
 ./build/training/train_faces \
   dataset \
@@ -144,26 +319,31 @@ cmake --build build/training -j
   models/lbph_faces.yml \
   models/face_labels.txt
 ```
+
 ### What the training tool does
 
 The training program automatically:
 
-scans each card-ID folder inside the dataset directory
-loads supported image files (.jpg, .jpeg, .png, .bmp)
-detects the largest face in each image
-converts the face to grayscale
-resizes it to 160x160
-applies histogram equalisation
-trains an LBPH face recognition model
-writes the trained model to models/lbph_faces.yml
-writes the label-to-card mapping to models/face_labels.txt
+- scans each card-ID folder inside the dataset directory
+- loads supported image files (`.jpg`, `.jpeg`, `.png`, `.bmp`)
+- detects the largest face in each image
+- converts the face to grayscale
+- resizes it to `160x160`
+- applies histogram equalisation
+- trains an LBPH face recognition model
+- writes the trained model to `models/lbph_faces.yml`
+- writes the label-to-card mapping to `models/face_labels.txt`
 
 Images where no face is detected are skipped automatically.
 
 ### Notes
-Folder names in dataset/ must match the card IDs used by the access-control system.
-After retraining, the main program will use the updated files in models/.
-A pre-trained demo model is already included in this repository, so the project can be tested without retraining first.
+
+- Folder names in `dataset/` must match the card IDs used by the access-control system.
+- After retraining, the main program will use the updated files in `models/`.
+- A pre-trained demo model is already included in this repository, so the project can be tested without retraining first.
+
+---
+
 ## Realtime Performance
 
 The system logs internal latency traces to measure how quickly each authentication path responds.
@@ -178,7 +358,8 @@ The system logs internal latency traces to measure how quickly each authenticati
 
 ### What this means
 
-The core access-control pipeline is very fast.  
+The core access-control pipeline is very fast.
+
 Card verification and risk-policy decisions complete in only a few microseconds, so the system can react to card events almost instantly.
 
 The main delay comes from the **face verification stage**, not from the event-driven control logic itself. This is expected because face verification requires live camera capture, face detection, and repeated prediction across multiple frames before a final decision is made.
@@ -191,32 +372,42 @@ In practice, this gives the system two behaviours:
 This fits the design goal of the project: keep normal door access responsive, while adding a more expensive verification step only when the situation is considered risky.
 
 ### Example traces
+
 #### valid_card_granted total
 ![test Photo](docs/images/lag.png)
+
 #### invalid_card_denied total
 ![test Photo](docs/images/lag2.png)
+
+---
 
 ## Runtime Controls
 
 - `d` + `Enter`: enable force-face demo mode
 - `n` + `Enter`: return to normal risk policy
 - `Ctrl+C`: graceful shutdown
-
+---
 ## Social Media
 
-Project updates and demo clips will be shared here:
+
+Project updates and demo clips are available here:
 
 - TikTok: https://www.tiktok.com/@d.a.control
-- YouTube: https://www.youtube.com/channel/UC-V3Io8VhV6NMzuq4lF-zSw
+- YouTube: https://www.youtube.com/@Dongxin-pp8ee/shorts
+
+---
 
 ## Team Contributions
 
-- Guo Yinchen: core implementation, integration, hardware setup, documentation
-- Zhuoxian Cai: Servo motor control, jitter reduction, testing
-- Yin Bole: documentation support, unit test 
-- Wenqiang Ding: initial logging prototype (not integrated into final system), bug fix
-- Po Hsiang Chiu: bug fix, Video editing
+- **Guo Yinchen**: core implementation, integration, hardware setup, documentation
+- **Zhuoxian Cai**: servo motor control, jitter reduction, testing
+- **Yin Bole**: documentation support, unit testing
+- **Wenqiang Ding**: initial logging prototype (not integrated into final system), bug fixing
+- **Po Hsiang Chiu**: bug fixing, video editing
+
+---
+
 ## License
 
-This project is released under the MIT License.  
+This project is released under the **MIT License**.  
 See the [LICENSE](LICENSE) file for details.
