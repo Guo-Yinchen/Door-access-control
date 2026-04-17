@@ -134,7 +134,7 @@ If your wiring is different, update the GPIO pin definitions in `src/main.cpp` b
 
 ## Software Requirements
 
-This project was developed for **Debian Trixie on Raspberry Pi 5**.
+This project was developed for **Raspberry Pi 5**.
 
 ### Required software and libraries
 
