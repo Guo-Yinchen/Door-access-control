@@ -409,3 +409,7 @@ Project updates and demo clips are available here:
 
 This project is released under the **MIT License**.  
 See the [LICENSE](LICENSE) file for details.
+
+## AI Usage Statement
+
+ [AI Usage Statement](./docs/AI_USAGE_STATEMENT.md)
