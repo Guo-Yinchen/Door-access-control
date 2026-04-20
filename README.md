@@ -160,7 +160,8 @@ sudo apt install -y \
   libgpiod-dev \
   libopencv-dev \
   libopencv-contrib-dev \
-  rpicam-apps
+  rpicam-apps \
+  git
 ```
 
 ---
